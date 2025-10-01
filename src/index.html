@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cor.Inc AR Demo</title>
+
+  <!-- A-Frame 1.7.0 -->
+  <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+
+  <!-- AR.js (パターンマーカー用) -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <!-- Three.js + three-vrm (Import Map) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.177.0/examples/jsm/",
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.4.2/lib/three-vrm.module.min.js"
+      }
+    }
+  </script>
+
+  <!-- VRMローダーコンポーネント -->
+  <script type="module" src="./components/vrm-loader.js"></script>
+
+  <!-- アニメーションコンポーネント -->
+  <script type="module" src="./components/vrm-animation.js"></script>
+
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      font-family: sans-serif;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h3>🐧 Cor.Inc AR Demo</h3>
+    <p>📸 名刺のペンギンロゴにカメラを向けてください</p>
+    <p id="status">⏳ 初期化中...</p>
+  </div>
+
+  <a-scene
+    embedded
+    arjs="patternRatio: 0.80; debugUIEnabled: false;"
+    vr-mode-ui="enabled: false"
+  >
+    <a-entity camera></a-entity>
+
+    <!-- ペンギンロゴカスタムマーカー (Pattern Ratio: 0.80) -->
+    <a-marker type="pattern" url="./assets/markers/penguin-marker.patt" id="marker">
+      <!-- ライト（マーカー内に配置） -->
+      <a-light type="ambient" intensity="0.9"></a-light>
+      <a-light type="directional" intensity="1.0" position="1 2 1"></a-light>
+      <a-light type="point" color="#ddddff" intensity="0.5" position="-1 2 1"></a-light>
+
+      <!-- VRMアバター -->
+      <a-entity
+        id="avatar"
+        vrm-loader="src: ./assets/models/avatar.vrm"
+        vrm-animation="src: ./assets/animations/VRMA_01.vrma; autoplay: false; loop: false"
+        position="0 0 0"
+        rotation="0 0 0"
+      ></a-entity>
+    </a-marker>
+  </a-scene>
+
+  <script>
+    // A-Frameシーンの準備完了を待つ
+    const scene = document.querySelector('a-scene');
+
+    scene.addEventListener('loaded', () => {
+      const marker = document.querySelector('#marker');
+
+      marker.addEventListener('markerFound', () => {
+        document.querySelector('#status').textContent = '🎉 マーカー検出！';
+
+        // マーカー検出時にアニメーション再生
+        const avatar = document.querySelector('#avatar');
+        if (avatar && avatar.components['vrm-animation']) {
+          avatar.components['vrm-animation'].playAnimation();
+        }
+      });
+
+      marker.addEventListener('markerLost', () => {
+        document.querySelector('#status').textContent = '❌ マーカーが見えません';
+      });
+
+      // シーンロード後にステータス更新
+      document.querySelector('#status').textContent = '✅ 準備完了！マーカーを映してください';
+    });
+
+    // カメラアクセス拒否のエラーハンドリング
+    window.addEventListener('error', (e) => {
+      if (e.message && e.message.includes('camera')) {
+        document.querySelector('#status').textContent = '⚠️ カメラへのアクセスを許可してください';
+      }
+    });
+
+    // VRMロードエラーのハンドリング
+    const avatarEl = document.querySelector('#avatar');
+    if (avatarEl) {
+      avatarEl.addEventListener('vrm-load-error', () => {
+        document.querySelector('#status').textContent = '⚠️ アバターのロードに失敗しました';
+      });
+    }
+  </script>
+</body>
+</html>
