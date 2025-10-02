@@ -1,0 +1,323 @@
+/**
+ * ボトムシートUI - モバイル最適化スタイル
+ * AR表示領域を最大化しながら、快適なチャット操作を提供
+ */
+
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+
+  /* GPUアクセラレーション */
+  transform: translateZ(0);
+  will-change: height;
+
+  /* デフォルトは折りたたみ状態 */
+  height: 120px;
+}
+
+/* ドラッグハンドル */
+.drag-handle {
+  width: 40px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 2px;
+  margin: 12px auto;
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* メッセージプレビューエリア */
+.messages-preview {
+  flex: 1;
+  padding: 0 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  /* スムーズなスクロール */
+  -webkit-overflow-scrolling: touch;
+
+  /* 初期状態は非表示 */
+  display: none;
+}
+
+/* スクロールバーのスタイル（Webkit） */
+.messages-preview::-webkit-scrollbar {
+  width: 4px;
+}
+
+.messages-preview::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.messages-preview::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+.messages-preview::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* メッセージバブル */
+.message-bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  max-width: 80%;
+  word-wrap: break-word;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-bubble.message-user {
+  align-self: flex-end;
+  background: rgba(102, 126, 234, 0.9);
+  color: white;
+}
+
+.message-bubble.message-assistant {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.95);
+  color: #333;
+}
+
+.message-avatar {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.message-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* タイピングインジケーター */
+.typing-indicator .message-text {
+  display: flex;
+  gap: 4px;
+}
+
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  background: #666;
+  border-radius: 50%;
+  animation: typingBounce 1.4s infinite;
+}
+
+.typing-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
+/* 入力コンテナ */
+.input-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.bottom-sheet-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  outline: none;
+  transition: background 0.2s;
+}
+
+.bottom-sheet-input:focus {
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+}
+
+.bottom-sheet-send {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 24px;
+  background: #667eea;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.bottom-sheet-send:hover {
+  background: #5568d3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.bottom-sheet-send:active {
+  transform: translateY(0);
+}
+
+/* モバイル最適化 */
+@media (max-width: 768px) {
+  .bottom-sheet {
+    /* タブレットでも同じ動作 */
+  }
+
+  .message-bubble {
+    max-width: 85%;
+  }
+
+  .bottom-sheet-input {
+    font-size: 16px; /* iOS Safariのズーム防止 */
+  }
+}
+
+/* 横画面対応 */
+@media (orientation: landscape) and (max-height: 600px) {
+  .bottom-sheet {
+    /* 横画面時は控えめに */
+    max-height: 200px;
+  }
+
+  .messages-preview {
+    max-height: 120px;
+  }
+
+  .input-container {
+    padding: 8px 16px;
+  }
+}
+
+/* 小型デバイス対応 */
+@media (max-width: 375px) {
+  .bottom-sheet-input {
+    font-size: 14px;
+  }
+
+  .bottom-sheet-send {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .message-text {
+    font-size: 13px;
+  }
+}
+
+/* セーフエリア対応（ノッチ、ホームインジケーター） */
+@supports (padding: max(0px)) {
+  .input-container {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .message-bubble.message-assistant {
+    background: rgba(50, 50, 50, 0.95);
+    color: #fff;
+  }
+
+  .input-container {
+    background: rgba(30, 30, 30, 0.95);
+  }
+
+  .bottom-sheet-input {
+    background: rgba(50, 50, 50, 0.9);
+    color: #fff;
+  }
+
+  .bottom-sheet-input:focus {
+    background: rgba(60, 60, 60, 1);
+  }
+
+  .typing-dot {
+    background: #999;
+  }
+}
+
+/* アクセシビリティ: 高コントラストモード */
+@media (prefers-contrast: high) {
+  .bottom-sheet {
+    border: 2px solid #000;
+  }
+
+  .message-bubble {
+    border: 1px solid #000;
+  }
+
+  .bottom-sheet-input {
+    border: 2px solid #000;
+  }
+}
+
+/* リデュースモーション対応 */
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet,
+  .message-bubble,
+  .bottom-sheet-send {
+    transition: none;
+    animation: none;
+  }
+
+  .typing-dot {
+    animation: none;
+  }
+}

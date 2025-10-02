@@ -1,8 +1,9 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import { handleFunctionCalling } from './google-calendar-integration.js';
+import { handleFunctionCalling } from './services/gemini.service.js';
 import dotenv from 'dotenv';
+import type { ChatRequest, ChatResponse } from './types/chat.types.js';
 
 dotenv.config();
 
@@ -12,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', async (req: Request<{}, ChatResponse, ChatRequest>, res: Response<ChatResponse | { error: string; message?: string; emotion?: string }>) => {
   try {
     const { message, oauthToken } = req.body;
 
@@ -23,7 +24,7 @@ app.post('/api/chat', async (req, res) => {
     console.log('[API] ユーザーメッセージ:', message);
 
     const result = await handleFunctionCalling(
-      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY!,
       message,
       oauthToken || null
     );
@@ -31,8 +32,9 @@ app.post('/api/chat', async (req, res) => {
     console.log('[API] Gemini応答:', result);
 
     res.json({
-      message: result.message,
-      emotion: result.emotion
+      message: result.text,
+      emotion: result.emotion,
+      timestamp: new Date()
     });
 
   } catch (error) {

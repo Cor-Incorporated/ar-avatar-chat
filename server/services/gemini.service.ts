@@ -1,16 +1,18 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import { google } from 'googleapis';
+import type { EmotionType } from '../types/emotion.types.js';
+import type { GeminiResponse, CalendarEvent } from '../types/chat.types.js';
 
 // レスポンススキーマの定義
 const responseSchema = {
-  type: 'object',
+  type: 'object' as const,
   properties: {
     message: {
-      type: 'string',
+      type: 'string' as const,
       description: '博多弁での応答メッセージ',
     },
     emotion: {
-      type: 'string',
+      type: 'string' as const,
       enum: ['neutral', 'happy', 'angry', 'sad', 'relaxed', 'surprised', 'thinking'],
       description: '現在の感情状態',
     },
@@ -24,10 +26,10 @@ const functionDeclarations = [
     name: "get_calendar_events",
     description: "ユーザーのGoogleカレンダーから特定の日付または期間の予定を取得します。",
     parametersJsonSchema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
         date_range: {
-          type: 'string',
+          type: 'string' as const,
           description: "予定を取得したい日時や期間。例: 「明日」、「今週の金曜日」、「2025年10月2日」"
         }
       },
@@ -71,10 +73,20 @@ const HAKATA_CHARACTER_INSTRUCTION = `
 
 const MODEL_NAME = 'gemini-2.5-flash';
 
+interface CalendarExecutionResult {
+  success: boolean;
+  events?: CalendarEvent[];
+  message?: string;
+  error?: string;
+}
+
 /**
  * Google Calendar APIを呼び出して予定を取得
  */
-async function execute_calendar_events(dateRange, oauthToken) {
+async function execute_calendar_events(
+  dateRange: string,
+  oauthToken: string | null
+): Promise<CalendarExecutionResult> {
   if (!oauthToken) {
     return {
       success: false,
@@ -89,19 +101,24 @@ async function execute_calendar_events(dateRange, oauthToken) {
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
     const now = new Date();
-    let timeMin, timeMax;
+    let timeMin: string;
+    let timeMax: string;
 
     if (dateRange.includes("明日")) {
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(0, 0, 0, 0);
       timeMin = tomorrow.toISOString();
-      timeMax = new Date(tomorrow.setDate(tomorrow.getDate() + 1)).toISOString();
+      const nextDay = new Date(tomorrow);
+      nextDay.setDate(nextDay.getDate() + 1);
+      timeMax = nextDay.toISOString();
     } else if (dateRange.includes("今日")) {
       const today = new Date(now);
       today.setHours(0, 0, 0, 0);
       timeMin = today.toISOString();
-      timeMax = new Date(today.setDate(today.getDate() + 1)).toISOString();
+      const nextDay = new Date(today);
+      nextDay.setDate(nextDay.getDate() + 1);
+      timeMax = nextDay.toISOString();
     } else {
       timeMin = now.toISOString();
       const nextWeek = new Date(now);
@@ -128,11 +145,18 @@ async function execute_calendar_events(dateRange, oauthToken) {
       };
     }
 
-    const formattedEvents = events.map(event => ({
+    const formattedEvents: CalendarEvent[] = events.map(event => ({
       summary: event.summary || '（タイトルなし）',
-      start: event.start.dateTime || event.start.date,
-      end: event.end.dateTime || event.end.date,
-      location: event.location || ''
+      start: {
+        dateTime: event.start?.dateTime || event.start?.date || '',
+        timeZone: event.start?.timeZone || 'Asia/Tokyo'
+      },
+      end: {
+        dateTime: event.end?.dateTime || event.end?.date || '',
+        timeZone: event.end?.timeZone || 'Asia/Tokyo'
+      },
+      location: event.location || undefined,
+      description: event.description || undefined
     }));
 
     return {
@@ -141,10 +165,11 @@ async function execute_calendar_events(dateRange, oauthToken) {
     };
 
   } catch (error) {
-    console.error('[Calendar API Error]:', error.message);
+    const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+    console.error('[Calendar API Error]:', errorMessage);
     return {
       success: false,
-      error: `カレンダーの取得に失敗しました: ${error.message}`
+      error: `カレンダーの取得に失敗しました: ${errorMessage}`
     };
   }
 }
@@ -152,7 +177,11 @@ async function execute_calendar_events(dateRange, oauthToken) {
 /**
  * Function Calling処理（Structured Output対応）
  */
-export async function handleFunctionCalling(apiKey, userPrompt, oauthToken) {
+export async function handleFunctionCalling(
+  apiKey: string,
+  userPrompt: string,
+  oauthToken: string | null
+): Promise<GeminiResponse> {
   const ai = new GoogleGenAI({ apiKey });
 
   // まずStructured Outputで直接応答を試みる（Function Calling不要の場合）
@@ -171,15 +200,17 @@ export async function handleFunctionCalling(apiKey, userPrompt, oauthToken) {
     }
   });
 
-  try {
-    const parsedResponse = JSON.parse(directResponse.text);
-    return {
-      message: parsedResponse.message,
-      emotion: parsedResponse.emotion
-    };
-  } catch (parseError) {
-    // JSON解析失敗 - Function Callingが必要かもしれない
-    console.log('[Info] Structured Outputのみでは不十分、Function Calling試行');
+  if (directResponse.text) {
+    try {
+      const parsedResponse = JSON.parse(directResponse.text);
+      return {
+        text: parsedResponse.message,
+        emotion: parsedResponse.emotion as EmotionType
+      };
+    } catch (parseError) {
+      // JSON解析失敗 - Function Callingが必要かもしれない
+      console.log('[Info] Structured Outputのみでは不十分、Function Calling試行');
+    }
   }
 
   // Function Calling対応（Structured OutputなしのAPIコール）
@@ -207,7 +238,7 @@ export async function handleFunctionCalling(apiKey, userPrompt, oauthToken) {
 
     if (!functionCalls || functionCalls.length === 0) {
       // Function Call不要 - テキストから感情を抽出
-      const text = currentResponse.text;
+      const text = currentResponse.text || "応答がありません。";
 
       // Structured Outputで再フォーマット
       const formattedResponse = await ai.models.generateContent({
@@ -225,32 +256,39 @@ export async function handleFunctionCalling(apiKey, userPrompt, oauthToken) {
         }
       });
 
-      try {
-        const parsedResponse = JSON.parse(formattedResponse.text);
+      if (formattedResponse.text) {
+        try {
+          const parsedResponse = JSON.parse(formattedResponse.text);
+          return {
+            text: parsedResponse.message,
+            emotion: parsedResponse.emotion as EmotionType
+          };
+        } catch (parseError) {
+          console.error('[Parse Error]:', parseError);
+          return {
+            text: text,
+            emotion: "neutral"
+          };
+        }
+      } else {
         return {
-          message: parsedResponse.message,
-          emotion: parsedResponse.emotion
-        };
-      } catch (parseError) {
-        console.error('[Parse Error]:', parseError);
-        return {
-          message: text || "応答の解析に失敗しました。",
+          text: "応答の解析に失敗しました。",
           emotion: "neutral"
         };
       }
     }
 
     // Function Callsの処理
-    const functionResponses = [];
+    const functionResponses: Array<{ name: string; response: CalendarExecutionResult }> = [];
     for (const functionCall of functionCalls) {
-      const functionName = functionCall.name;
+      const functionName = functionCall.name || 'unknown';
       const args = functionCall.args;
 
-      let functionResult;
+      let functionResult: CalendarExecutionResult;
 
-      if (functionName === 'get_calendar_events') {
+      if (functionName === 'get_calendar_events' && args) {
         functionResult = await execute_calendar_events(
-          args.date_range,
+          args.date_range as string,
           oauthToken
         );
       } else {
@@ -282,23 +320,34 @@ export async function handleFunctionCalling(apiKey, userPrompt, oauthToken) {
       }
     });
 
-    try {
-      const parsedResponse = JSON.parse(finalResponse.text);
+    if (finalResponse.text) {
+      try {
+        const parsedResponse = JSON.parse(finalResponse.text);
+        return {
+          text: parsedResponse.message,
+          emotion: parsedResponse.emotion as EmotionType,
+          functionCall: {
+            name: functionResponses[0].name,
+            args: functionResponses[0].response as unknown as Record<string, unknown>
+          }
+        };
+      } catch (parseError) {
+        console.error('[Parse Error]:', parseError);
+        return {
+          text: "応答の解析に失敗しました。",
+          emotion: "neutral"
+        };
+      }
+    } else {
       return {
-        message: parsedResponse.message,
-        emotion: parsedResponse.emotion
-      };
-    } catch (parseError) {
-      console.error('[Parse Error]:', parseError);
-      return {
-        message: "応答の解析に失敗しました。",
+        text: "応答の解析に失敗しました。",
         emotion: "neutral"
       };
     }
   }
 
   return {
-    message: "処理が複雑すぎました。もう一度お試しください。",
+    text: "処理が複雑すぎました。もう一度お試しください。",
     emotion: "neutral"
   };
 }

@@ -1,0 +1,29 @@
+{
+  "name": "ar-avatar-chat",
+  "version": "1.0.0",
+  "description": "AR Avatar Chat Application with VRM and Gemini AI",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "cd server && npm run build",
+    "build:client": "tsc -p src/tsconfig.json",
+    "dev:server": "cd server && npm run dev",
+    "type-check": "npm run type-check:server && npm run type-check:client",
+    "type-check:server": "cd server && npm run type-check",
+    "type-check:client": "tsc -p src/tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "ar",
+    "vrm",
+    "gemini",
+    "ai",
+    "chat"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@pixiv/three-vrm": "^3.4.2",
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.3"
+  }
+}

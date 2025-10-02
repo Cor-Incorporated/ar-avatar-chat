@@ -28,11 +28,11 @@
   <!-- アニメーションコントローラー -->
   <script type="module" src="./components/vrm-animation-controller.js"></script>
 
-  <!-- チャットUI -->
-  <script src="./components/chat-ui.js"></script>
-  <script src="./controllers/chat-controller.js"></script>
+  <!-- ボトムシートUI (TypeScript compiled) -->
+  <script type="module" src="/dist/src/components/BottomSheet.js"></script>
+  <script type="module" src="/dist/src/controllers/ChatController.js"></script>
 
-  <link rel="stylesheet" href="./styles/chat-ui.css">
+  <link rel="stylesheet" href="/src/styles/bottom-sheet.css">
 
   <style>
     body { margin: 0; overflow: hidden; }
@@ -80,7 +80,10 @@
     </a-marker>
   </a-scene>
 
-  <script>
+  <script type="module">
+    // TypeScriptでコンパイルされたChatControllerをインポート
+    import { ChatController } from '/dist/src/controllers/ChatController.js';
+
     const scene = document.querySelector('a-scene');
 
     scene.addEventListener('loaded', () => {
@@ -96,16 +99,10 @@
 
       document.querySelector('#status').textContent = '準備完了！';
 
-      const chatUI = new ChatUI();
-      chatUI.init();
+      // ボトムシートUIとチャットコントローラーを初期化
+      const chatController = new ChatController('http://localhost:3000/api/chat');
 
-      const chatController = new ChatController(chatUI);
-
-      chatUI.onSendMessage = (text) => {
-        chatController.sendMessage(text);
-      };
-
-      console.log('チャットUIが初期化されました');
+      console.log('ボトムシートUIが初期化されました');
     });
 
     window.addEventListener('error', (e) => {
