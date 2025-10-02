@@ -105,12 +105,16 @@ Custom A-Frame components are ES6 modules using import maps:
 - Ready for HTTPS deployment and mobile testing
 
 **Phase 2 🔄 (In Progress - Started 2025-10-01)**: LLM chat integration with Gemini 2.5 Flash + Google Calendar
-- Proxy server implementation complete
-- Function Calling implementation complete
-- VRoid tone optimization complete (Few-shot examples approach)
-- OAuth 2.0 integration pending
-- Technical breakthrough: Discovered systemInstruction limitations, implemented workaround with Few-shot examples
-- **Day 2 Morning Status (2025-10-02)**: VRoid tone issue resolved, ready for Calendar integration testing
+- **Day 1 (2025-10-01)**: Proxy server + OAuth handler implementation complete
+- **Day 2 Morning (2025-10-02)**: Function Calling + VRoid tone implementation complete
+- **Day 2 Afternoon (2025-10-02)**: OAuth認証フロー + Calendar連携 + 博多弁実装完了 ✅
+- Technical breakthrough:
+  - Gemini 2.5 Flash + Function Calling完全動作
+  - systemInstructionの正しい配置方法を確立（config内に配置）
+  - 博多弁という自然言語制約の中でのFunction Calling発動成功
+  - Temperature 0.5で博多弁の自然さとFunction Calling精度のバランス実現
+- **Current Status**: OAuth + Function Calling + 博多弁キャラクター実装完了
+- **Next**: クライアント統合（AR.jsとの連携）
 
 ## Critical Files
 

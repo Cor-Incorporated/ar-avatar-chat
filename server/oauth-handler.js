@@ -22,8 +22,21 @@ function getAuthUrl() {
 
 // 認証コードからトークンを取得
 async function getTokenFromCode(code) {
-    const { tokens } = await oauth2Client.getToken(code);
-    return tokens;
+    try {
+        console.log('[OAuth] Exchanging code for token...');
+        console.log('[OAuth] Code:', code.substring(0, 20) + '...');
+        console.log('[OAuth] Client ID:', process.env.GOOGLE_CLIENT_ID ? 'Set' : 'NOT SET');
+        console.log('[OAuth] Client Secret:', process.env.GOOGLE_CLIENT_SECRET ? 'Set' : 'NOT SET');
+        console.log('[OAuth] Redirect URI:', 'http://localhost:3000/oauth2callback');
+
+        const { tokens } = await oauth2Client.getToken(code);
+        console.log('[OAuth] Token exchange successful!');
+        return tokens;
+    } catch (error) {
+        console.error('[OAuth ERROR] Token exchange failed:', error.message);
+        console.error('[OAuth ERROR] Full error:', error);
+        throw error;
+    }
 }
 
 module.exports = {

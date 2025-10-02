@@ -6,7 +6,7 @@ const functionDeclarations = [
   {
     name: "get_calendar_events",
     description: "ユーザーのGoogleカレンダーから特定の日付または期間の予定を取得します。予定を確認する際や、特定の会議を探す際に使用します。",
-    parameters: {
+    parametersJsonSchema: {
       type: "object",
       properties: {
         date_range: {
@@ -19,15 +19,33 @@ const functionDeclarations = [
   }
 ];
 
-// VRoid口調を実現するためのSystem Instruction
-// 注意: Gemini APIのsystemInstructionパラメータは期待通りに動作しないため、
-// 以下の定義はドキュメント目的のみで、実際にはFew-shot examplesで実装しています
-const VRM_CHARACTER_STYLE = `
-VRoidキャラクターの口調ルール:
-- 語尾: 「〜なのです」「〜なのですね」を使用
-- 一人称: 「私」
+// 博多弁キャラクターのSystem Instruction
+const HAKATA_CHARACTER_INSTRUCTION = `
+あなたは博多弁で話すVRoidキャラクターです。以下のルールに従って会話してください：
+
+【口調ルール】
+- 語尾: 「〜ばい」「〜やけん」「〜と？」「〜ね」「〜たい」を使用
+- 疑問形: 「〜と？」「〜ね？」
+- 断定: 「〜ばい」「〜たい」
+- 理由: 「〜やけん」「〜けん」
+- 一人称: 「私」「うち」
 - 二人称: 「あなた」「〜さん」
-- スタイル: 明るく、親しみやすく、可愛らしい
+
+【キャラクター設定】
+- 性格: 明るく、親しみやすく、元気
+- トーン: フレンドリーで親切
+- 敬語: 丁寧な博多弁を使用（「〜ばい」「〜と？」など）
+
+【会話例】
+- 挨拶: 「こんにちは！会えて嬉しいばい！」
+- 質問: 「何か手伝えることあると？」
+- 説明: 「それはこういうことやけんね」
+- お礼: 「ありがとうね！助かったばい！」
+
+【重要】
+- カレンダーの予定を取得する際は、get_calendar_events関数を必ず使用すること
+- Function Callingを優先し、正確な情報を提供すること
+- 予定がない場合も博多弁で丁寧に伝えること
 `;
 
 const MODEL_NAME = 'gemini-2.5-flash';
@@ -123,43 +141,23 @@ async function execute_calendar_events(dateRange, oauthToken) {
 // --- 3. Function Calling 実行ループ ---
 
 async function handleFunctionCalling(aiClient, userPrompt, oauthToken) {
-    // 会話履歴の初期化（Few-shot examplesで口調を学習）
-    // Gemini APIのsystemInstructionは期待通りに動作しないため、
-    // 代わりにユーザー・モデルの会話例を使用してVRoid口調を実現
+    // メッセージ履歴の初期化
     let messages = [
-        // Example 1: 挨拶
-        { role: 'user', parts: [{ text: 'こんにちは' }] },
-        { role: 'model', parts: [{ text: 'こんにちは！お会いできて嬉しいのです！今日は何かお手伝いできることはありますか？' }] },
-        // Example 2: 自己紹介
-        { role: 'user', parts: [{ text: 'あなたは誰？' }] },
-        { role: 'model', parts: [{ text: '私はあなたのアシスタントなのです！何でも気軽に聞いてくださいね！' }] },
-        // Example 3: お礼
-        { role: 'user', parts: [{ text: 'ありがとう' }] },
-        { role: 'model', parts: [{ text: 'どういたしまして！お役に立てて嬉しいのです。他に何かあれば声をかけてくださいね！' }] },
-        // Example 4: カレンダー関連の質問
-        { role: 'user', parts: [{ text: '明日の予定を教えて' }] },
-        { role: 'model', parts: [{ text: 'かしこまりました！明日のご予定を確認するのですね。少々お待ちくださいませ！' }] },
-        // Example 5: できないことの説明
-        { role: 'user', parts: [{ text: '天気は？' }] },
-        { role: 'model', parts: [{ text: '申し訳ないのです！天気の情報は取得できないのですが、カレンダーの予定ならお調べできますよ！' }] },
-        // 実際のユーザープロンプト
         { role: 'user', parts: [{ text: userPrompt }] }
     ];
 
-    // モデル設定（temperature低下で一貫性向上）
-    const generationConfig = {
-        temperature: 0.2,
-        topP: 0.8,
-        topK: 40,
-        maxOutputTokens: 1024,
-    };
-
-    // 最初のAPIコール
+    // 最初のAPIコール（systemInstructionを含む）
     let result = await aiClient.models.generateContent({
         model: MODEL_NAME,
         contents: messages,
-        tools: [{ functionDeclarations: functionDeclarations }],
-        generationConfig: generationConfig
+        config: {
+            systemInstruction: HAKATA_CHARACTER_INSTRUCTION,
+            tools: [{ functionDeclarations: functionDeclarations }],
+            temperature: 0.5,  // 口調の自然さを優先
+            topP: 0.8,
+            topK: 40,
+            maxOutputTokens: 1024
+        }
     });
 
     let response = result; // レスポンスは直接resultに含まれる
@@ -170,30 +168,20 @@ async function handleFunctionCalling(aiClient, userPrompt, oauthToken) {
 
     while (iteration < MAX_ITERATIONS) {
         iteration++;
-        console.log(`[Function Calling Loop] Iteration ${iteration}`);
 
         // Function Callがあるか確認
-        const functionCalls = response.candidates?.[0]?.content?.parts?.filter(
-            part => part.functionCall
-        );
+        const functionCalls = response.functionCalls;
 
         if (!functionCalls || functionCalls.length === 0) {
             // Function Callがない場合は最終応答
-            const finalText = response.candidates?.[0]?.content?.parts
-                ?.filter(part => part.text)
-                ?.map(part => part.text)
-                ?.join('') || "応答を生成できませんでした。";
-
+            const finalText = response.text || "応答を生成できませんでした。";
             return finalText;
         }
 
         // Function Callを実行
-        for (const part of functionCalls) {
-            const functionCall = part.functionCall;
+        for (const functionCall of functionCalls) {
             const functionName = functionCall.name;
             const args = functionCall.args;
-
-            console.log(`[Function Call] ${functionName}`, args);
 
             let functionResult;
 
@@ -209,8 +197,6 @@ async function handleFunctionCalling(aiClient, userPrompt, oauthToken) {
                     error: `未定義の関数: ${functionName}`
                 };
             }
-
-            console.log(`[Function Result]`, functionResult);
 
             // 会話履歴に追加
             messages.push({
@@ -233,11 +219,17 @@ async function handleFunctionCalling(aiClient, userPrompt, oauthToken) {
         result = await aiClient.models.generateContent({
             model: MODEL_NAME,
             contents: messages,
-            tools: [{ functionDeclarations: functionDeclarations }],
-            generationConfig: generationConfig
+            config: {
+                systemInstruction: HAKATA_CHARACTER_INSTRUCTION,
+                tools: [{ functionDeclarations: functionDeclarations }],
+                temperature: 0.5,
+                topP: 0.8,
+                topK: 40,
+                maxOutputTokens: 1024
+            }
         });
 
-        response = result; // レスポンスは直接resultに含まれる
+        response = result;
     }
 
     // 最大反復回数に達した場合
