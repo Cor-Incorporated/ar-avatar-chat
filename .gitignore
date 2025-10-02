@@ -18,3 +18,13 @@ server/package-lock.json
 # IDE
 .vscode/
 .idea/
+
+# TypeScript build output
+dist/
+*.js.map
+*.d.ts
+*.d.ts.map
+
+# Mastra
+server/mastra.db
+server/mastra.db-journal
