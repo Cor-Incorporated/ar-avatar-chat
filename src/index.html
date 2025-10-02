@@ -25,8 +25,14 @@
   <!-- VRMローダーコンポーネント -->
   <script type="module" src="./components/vrm-loader.js"></script>
 
-  <!-- アニメーションコンポーネント -->
-  <script type="module" src="./components/vrm-animation.js"></script>
+  <!-- アニメーションコントローラー -->
+  <script type="module" src="./components/vrm-animation-controller.js"></script>
+
+  <!-- チャットUI -->
+  <script src="./components/chat-ui.js"></script>
+  <script src="./controllers/chat-controller.js"></script>
+
+  <link rel="stylesheet" href="./styles/chat-ui.css">
 
   <style>
     body { margin: 0; overflow: hidden; }
@@ -67,7 +73,7 @@
       <a-entity
         id="avatar"
         vrm-loader="src: ./assets/models/avatar.vrm"
-        vrm-animation="src: ./assets/animations/VRMA_01.vrma; autoplay: false; loop: false"
+        vrm-animation-controller
         position="0 0 0"
         rotation="0 0 0"
       ></a-entity>
@@ -75,42 +81,43 @@
   </a-scene>
 
   <script>
-    // A-Frameシーンの準備完了を待つ
     const scene = document.querySelector('a-scene');
 
     scene.addEventListener('loaded', () => {
       const marker = document.querySelector('#marker');
 
       marker.addEventListener('markerFound', () => {
-        document.querySelector('#status').textContent = '🎉 マーカー検出！';
-
-        // マーカー検出時にアニメーション再生
-        const avatar = document.querySelector('#avatar');
-        if (avatar && avatar.components['vrm-animation']) {
-          avatar.components['vrm-animation'].playAnimation();
-        }
+        document.querySelector('#status').textContent = 'マーカー検出！';
       });
 
       marker.addEventListener('markerLost', () => {
-        document.querySelector('#status').textContent = '❌ マーカーが見えません';
+        document.querySelector('#status').textContent = 'マーカーが見えません';
       });
 
-      // シーンロード後にステータス更新
-      document.querySelector('#status').textContent = '✅ 準備完了！マーカーを映してください';
+      document.querySelector('#status').textContent = '準備完了！';
+
+      const chatUI = new ChatUI();
+      chatUI.init();
+
+      const chatController = new ChatController(chatUI);
+
+      chatUI.onSendMessage = (text) => {
+        chatController.sendMessage(text);
+      };
+
+      console.log('チャットUIが初期化されました');
     });
 
-    // カメラアクセス拒否のエラーハンドリング
     window.addEventListener('error', (e) => {
       if (e.message && e.message.includes('camera')) {
-        document.querySelector('#status').textContent = '⚠️ カメラへのアクセスを許可してください';
+        document.querySelector('#status').textContent = 'カメラへのアクセスを許可してください';
       }
     });
 
-    // VRMロードエラーのハンドリング
     const avatarEl = document.querySelector('#avatar');
     if (avatarEl) {
       avatarEl.addEventListener('vrm-load-error', () => {
-        document.querySelector('#status').textContent = '⚠️ アバターのロードに失敗しました';
+        document.querySelector('#status').textContent = 'アバターのロードに失敗しました';
       });
     }
   </script>
