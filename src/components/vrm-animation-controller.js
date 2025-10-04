@@ -10,6 +10,8 @@ AFRAME.registerComponent('vrm-animation-controller', {
     this.currentAction = null;
     this.scene = null;
     this.vrm = null;
+    this.idleEmotion = 'neutral'; // デフォルトのidle状態
+    this.finishedListener = null; // イベントリスナーの参照を保持
 
     this.emotionToAnimation = {
       'neutral': './assets/animations/VRMA_01.vrma',
@@ -57,10 +59,18 @@ AFRAME.registerComponent('vrm-animation-controller', {
 
       if (gltf.animations && gltf.animations.length > 0) {
         const action = this.mixer.clipAction(gltf.animations[0]);
-        action.loop = THREE.LoopRepeat;
-        action.clampWhenFinished = true;
+        
+        // neutralはループ、その他は1回のみ
+        if (emotion === this.idleEmotion) {
+          action.loop = THREE.LoopRepeat;
+          console.log(`[Animation Controller] ${emotion} (idle) のアニメーションをロード: ${path}`);
+        } else {
+          action.loop = THREE.LoopOnce;
+          action.clampWhenFinished = true;
+          console.log(`[Animation Controller] ${emotion} (一時的) のアニメーションをロード: ${path}`);
+        }
+        
         this.actions[emotion] = action;
-        console.log(`[Animation Controller] ${emotion} のアニメーションをロード: ${path}`);
       } else {
         console.warn(`[Animation Controller] ${emotion} のアニメーションクリップが見つかりません`);
       }
@@ -86,6 +96,26 @@ AFRAME.registerComponent('vrm-animation-controller', {
 
     action.reset().fadeIn(0.5).play();
     this.currentAction = action;
+
+    // neutral以外のアニメーションの場合、終了後にneutralに戻る
+    if (emotion !== this.idleEmotion) {
+      // 既存のリスナーをクリーンアップ
+      if (this.finishedListener) {
+        this.mixer.removeEventListener('finished', this.finishedListener);
+      }
+      
+      // 新しいリスナーを設定（AnimationMixerのfinishedイベントを使用）
+      this.finishedListener = (e) => {
+        if (e.action === action) {
+          console.log(`[Animation Controller] ${emotion} アニメーション終了、neutralに戻ります`);
+          this.mixer.removeEventListener('finished', this.finishedListener);
+          this.finishedListener = null;
+          this.playEmotion(this.idleEmotion);
+        }
+      };
+      
+      this.mixer.addEventListener('finished', this.finishedListener);
+    }
 
     if (this.vrm) {
       this.setVRMExpression(emotion);
