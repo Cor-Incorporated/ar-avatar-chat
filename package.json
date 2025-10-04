@@ -24,6 +24,7 @@
   "devDependencies": {
     "@pixiv/three-vrm": "^3.4.2",
     "@types/three": "^0.180.0",
+    "@vercel/node": "^3.0.0",
     "typescript": "^5.9.3"
   }
 }

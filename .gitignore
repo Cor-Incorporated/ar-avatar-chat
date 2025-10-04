@@ -28,3 +28,4 @@ dist/
 # Mastra
 server/mastra.db
 server/mastra.db-journal
+.vercel/
