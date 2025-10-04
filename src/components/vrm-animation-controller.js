@@ -10,10 +10,9 @@ AFRAME.registerComponent('vrm-animation-controller', {
     this.currentAction = null;
     this.scene = null;
     this.vrm = null;
-    this.defaultEmotion = 'neutral'; // デフォルトの感情
 
     this.emotionToAnimation = {
-      'neutral': './assets/animations/idle_loop.vrma',
+      'neutral': './assets/animations/VRMA_01.vrma',
       'happy': './assets/animations/VRMA_02.vrma',
       'angry': './assets/animations/VRMA_03.vrma',
       'sad': './assets/animations/VRMA_04.vrma',
@@ -58,19 +57,7 @@ AFRAME.registerComponent('vrm-animation-controller', {
 
       if (gltf.animations && gltf.animations.length > 0) {
         const action = this.mixer.clipAction(gltf.animations[0]);
-        
-        // デフォルト（neutral）はループ、その他は1回のみ
-        if (emotion === this.defaultEmotion) {
-          action.loop = THREE.LoopRepeat;
-        } else {
-          action.loop = THREE.LoopOnce;
-          // 1回のみのアニメーション終了時にデフォルトに戻るイベントを設定
-          action.addEventListener('finished', () => {
-            console.log(`[Animation Controller] ${emotion} アニメーション終了、デフォルトに戻ります`);
-            this.playEmotion(this.defaultEmotion);
-          });
-        }
-        
+        action.loop = THREE.LoopRepeat;
         action.clampWhenFinished = true;
         this.actions[emotion] = action;
         console.log(`[Animation Controller] ${emotion} のアニメーションをロード: ${path}`);
@@ -93,16 +80,13 @@ AFRAME.registerComponent('vrm-animation-controller', {
 
     console.log(`[Animation Controller] 感情を切り替え: ${emotion}`);
 
-    // 現在のアクションを停止
     if (this.currentAction && this.currentAction !== action) {
       this.currentAction.fadeOut(0.5);
     }
 
-    // 新しいアクションを開始
     action.reset().fadeIn(0.5).play();
     this.currentAction = action;
 
-    // VRM表情を設定
     if (this.vrm) {
       this.setVRMExpression(emotion);
     }
