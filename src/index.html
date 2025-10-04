@@ -120,7 +120,13 @@
       document.querySelector('#status').textContent = '準備完了！';
 
       // ボトムシートUIとチャットコントローラーを初期化
-      const chatController = new ChatController('http://localhost:3000/api/chat');
+      // Vercel環境用：環境に応じてAPI URLを自動切り替え
+      const apiUrl = window.location.hostname === 'localhost'
+        ? 'http://localhost:3000/api/chat'
+        : '/api/chat';
+      
+      console.log('[Init] API URL:', apiUrl);
+      const chatController = new ChatController(apiUrl);
 
       console.log('ボトムシートUIが初期化されました');
     });
