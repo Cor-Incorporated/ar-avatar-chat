@@ -50,13 +50,89 @@ ar-avatar-chat/
 - `src/assets/markers/penguin-marker.patt` - カスタムマーカー
 - 詳細: `docs/Phase1_動作確認レポート.md` 参照
 
-### Phase 2: LLM統合（準備中）
-**期限**: リサーチャー調査完了後に決定
+### Phase 2: LLM統合 ✅ **完了**（2025-10-04）
+**担当**: 開発チーム
 
-🔜 **Phase 2実装予定**:
-- LLMチャット機能
-- TTS + リップシンク
-- 外部ツール連携（Google Calendar等）
+✅ **実装完了項目**:
+1. Gemini 2.5 Flash統合
+2. チャット機能（博多弁キャラクター「クラウディア」）
+3. 感情認識・アニメーション連携
+4. Google Calendar API連携（Function Calling）
+5. TypeScript化・コードリファクタリング
+
+**成果物**:
+- `server/services/gemini.service.ts` - Gemini API統合
+- `src/components/BottomSheet.ts` - チャットUI
+- `src/controllers/ChatController.ts` - チャット制御
+- `server/.env` - API設定ファイル
+- 詳細: `docs/Phase2完了報告.md` 参照
+
+### Phase 3: UI改善・TypeScript化 ✅ **完了**（2025-10-04）
+**担当**: 開発チーム
+
+✅ **実装完了項目**:
+1. フロントエンドTypeScript化
+2. モダンUI（BottomSheet）実装
+3. アニメーション制御改善（デフォルトidle_loop.vrma）
+4. エラーハンドリング強化
+5. レスポンシブデザイン対応
+
+---
+
+## 🚀 起動方法
+
+### 前提条件
+- Node.js 18+ インストール済み
+- Google Gemini API キー取得済み
+- 実機スマートフォン（iOS Safari 18+ / Android Chrome 120+）
+
+### 1. リポジトリクローン
+```bash
+git clone https://github.com/Cor-Incorporated/ar-avatar-chat.git
+cd ar-avatar-chat
+```
+
+### 2. サーバー起動
+```bash
+# サーバーディレクトリに移動
+cd server
+
+# 依存関係インストール
+npm install
+
+# 環境変数設定（.envファイル作成）
+cp .env.example .env
+# .envファイルを編集してGEMINI_API_KEYを設定
+
+# サーバー起動
+npm run build
+npm start
+```
+
+### 3. フロントエンド起動
+```bash
+# プロジェクトルートに戻る
+cd ..
+
+# フロントエンド依存関係インストール
+npm install
+
+# 開発サーバー起動
+npm run dev
+# または
+python3 -m http.server 8000
+```
+
+### 4. アクセス
+- ブラウザ: `http://localhost:8000` (フロントエンド)
+- API: `http://localhost:3000/api/chat` (バックエンド)
+
+### 5. テスト
+1. スマートフォンでHTTPS環境にアクセス
+2. カメラ許可
+3. ペンギンマーカーを印刷してカメラにかざす
+4. VRMアバター表示確認
+5. チャット機能テスト
 
 ---
 
@@ -108,11 +184,37 @@ Phase 1はリサーチャーの調査結果に依存しないため、**並行�
 
 ---
 
+## 🎯 技術仕様
+
+### フロントエンド
+- **A-Frame**: 1.7.0
+- **AR.js**: 3.4.7  
+- **Three.js**: VRM 3.4.2
+- **TypeScript**: 5.9.3
+- **モダンUI**: BottomSheet コンポーネント
+
+### バックエンド
+- **Node.js**: 18+
+- **Express**: 5.1.0
+- **Google Gemini**: 2.5 Flash
+- **TypeScript**: 5.9.3
+- **Google Calendar API**: 連携済み
+
+### AI機能
+- **キャラクター**: クラウディア（Cor.Inc. AIアンバサダー）
+- **言語**: 博多弁
+- **感情認識**: 7種類（neutral/happy/angry/sad/relaxed/surprised/thinking）
+- **Function Calling**: Google Calendar連携
+
+---
+
 ## バージョン管理
 
 - **初版**: 2025-10-01（PdM 寺田）
+- **Phase 2完了**: 2025-10-04（LLM統合）
+- **Phase 3完了**: 2025-10-04（UI改善・TypeScript化）
 - **更新**: 開発チーム・リサーチャーの成果物追加時に随時更新
 
 ---
 
-開発チームの皆さん、よろしくお願いします！
+**🎉 プロジェクト完了！Cor.Inc.の技術力を示すARアバターチャットアプリケーションが完成しました！**
