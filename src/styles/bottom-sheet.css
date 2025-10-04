@@ -163,7 +163,6 @@
   left: 0;
   right: 0;
   padding: 16px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(10px);
   border-radius: 20px 20px 0 0;
@@ -172,9 +171,6 @@
   align-items: center;
   flex-shrink: 0;
   box-shadow: none;
-  
-  /* キーボード表示時のスクロール防止 */
-  touch-action: manipulation;
 }
 
 .bottom-sheet-input {
@@ -186,10 +182,6 @@
   font-size: 16px;
   outline: none;
   transition: background 0.2s;
-  
-  /* iOSのズーム防止とキーボード問題の対策 */
-  -webkit-appearance: none;
-  appearance: none;
 }
 
 .bottom-sheet-input:focus {
