@@ -12,6 +12,11 @@
 - スマートフォン（iOS Safari 18+ / Android Chrome 120+）
 - HTTPS環境必須
 
+### 🌐 本番環境
+- **Vercelでデプロイ済み**: https://ar-avatar-chat.vercel.app
+- 自動HTTPS対応
+- グローバルCDN配信
+
 ---
 
 ## プロジェクト構成
@@ -73,9 +78,19 @@ ar-avatar-chat/
 ✅ **実装完了項目**:
 1. フロントエンドTypeScript化
 2. モダンUI（BottomSheet）実装
-3. アニメーション制御改善（デフォルトidle_loop.vrma）
+3. アニメーション制御改善（一時的感情→neutral自動復帰）
 4. エラーハンドリング強化
 5. レスポンシブデザイン対応
+
+### Phase 4: Vercelデプロイ ✅ **完了**（2025-10-05）
+**担当**: 開発チーム
+
+✅ **実装完了項目**:
+1. Vercel設定（vercel.json, .vercelignore）
+2. Serverless Functions（api/chat.js）
+3. 環境変数管理（GEMINI_API_KEY）
+4. モバイルUI最適化（キーボード対応）
+5. 本番環境デプロイ完了
 
 ---
 
@@ -208,13 +223,28 @@ Phase 1はリサーチャーの調査結果に依存しないため、**並行�
 
 ---
 
+## 🚀 デプロイ情報
+
+### 本番環境（Vercel）
+- **URL**: https://ar-avatar-chat.vercel.app
+- **プラットフォーム**: Vercel
+- **自動デプロイ**: mainブランチへのpush時
+- **環境変数**: Vercel Dashboardで管理
+
+### ローカル開発
+- フロントエンド: `http://localhost:8000/src/index.html`
+- バックエンド: `http://localhost:3000`
+
+---
+
 ## バージョン管理
 
 - **初版**: 2025-10-01（PdM 寺田）
 - **Phase 2完了**: 2025-10-04（LLM統合）
 - **Phase 3完了**: 2025-10-04（UI改善・TypeScript化）
+- **Phase 4完了**: 2025-10-05（Vercelデプロイ）
 - **更新**: 開発チーム・リサーチャーの成果物追加時に随時更新
 
 ---
 
-**🎉 プロジェクト完了！Cor.Inc.の技術力を示すARアバターチャットアプリケーションが完成しました！**
+**🎉 本番稼働中！Cor.Inc.の技術力を示すARアバターチャットアプリケーションがVercelで公開されています！**
