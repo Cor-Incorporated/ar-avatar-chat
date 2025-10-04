@@ -23,8 +23,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    // server/dist/index.jsをインポート
-    const { handleFunctionCalling } = await import('../server/dist/services/gemini.service.js');
+    console.log('[API] リクエスト受信:', req.method, req.url);
+    console.log('[API] ボディ:', req.body);
+    
+    // 動的インポート（Vercel環境用）
+    let handleFunctionCalling;
+    try {
+      console.log('[API] Geminiサービスをインポート中...');
+      const module = await import('../server/dist/services/gemini.service.js');
+      handleFunctionCalling = module.handleFunctionCalling;
+      console.log('[API] インポート成功');
+    } catch (importError) {
+      console.error('[API] インポートエラー詳細:', importError.message, importError.stack);
+      res.status(500).json({
+        error: 'サーバー初期化エラー',
+        message: `サーバーの準備中です: ${importError.message}`,
+        emotion: 'sad'
+      });
+      return;
+    }
     
     const { message, oauthToken } = req.body;
 
