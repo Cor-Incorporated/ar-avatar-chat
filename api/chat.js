@@ -1,17 +1,9 @@
 /**
  * Vercel Serverless Function: /api/chat
- * 
- * シンプルなAPIエンドポイント実装
+ * JavaScriptで実装（TypeScriptのビルド問題を回避）
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleFunctionCalling } from '../server/services/gemini.service';
-import type { ChatRequest, ChatResponse } from '../server/types/chat.types';
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+export default async function handler(req, res) {
   // CORS設定
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -31,7 +23,10 @@ export default async function handler(
   }
 
   try {
-    const { message, oauthToken } = req.body as ChatRequest;
+    // server/dist/index.jsをインポート
+    const { handleFunctionCalling } = await import('../server/dist/services/gemini.service.js');
+    
+    const { message, oauthToken } = req.body;
 
     if (!message) {
       res.status(400).json({ error: 'メッセージが必要です' });
@@ -42,7 +37,7 @@ export default async function handler(
       console.error('[API] GEMINI_API_KEYが設定されていません');
       res.status(500).json({
         error: 'サーバー設定エラー',
-        message: 'API設定が不足しています。管理者に連絡してください。',
+        message: 'API設定が不足しています。',
         emotion: 'sad'
       });
       return;
@@ -58,13 +53,11 @@ export default async function handler(
 
     console.log('[API] Gemini応答:', result);
 
-    const response: ChatResponse = {
+    res.status(200).json({
       message: result.text,
       emotion: result.emotion,
       timestamp: new Date()
-    };
-
-    res.status(200).json(response);
+    });
 
   } catch (error) {
     console.error('[API] エラー:', error);

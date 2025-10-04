@@ -2,6 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": ".",
-  "installCommand": "npm install && cd server && npm install"
+  "installCommand": "npm install && cd server && npm install",
+  "rewrites": [
+    { "source": "/", "destination": "/src/index.html" },
+    { "source": "/components/:path*", "destination": "/src/components/:path*" },
+    { "source": "/assets/:path*", "destination": "/src/assets/:path*" },
+    { "source": "/styles/:path*", "destination": "/src/styles/:path*" },
+    { "source": "/dist/:path*", "destination": "/dist/:path*" }
+  ]
 }
 
