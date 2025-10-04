@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { google } from 'googleapis';
+import type { CalendarEvent, GeminiResponse } from '../types/chat.types.js';
 import type { EmotionType } from '../types/emotion.types.js';
-import type { GeminiResponse, CalendarEvent } from '../types/chat.types.js';
 
 // レスポンススキーマの定義
 const responseSchema = {
@@ -38,9 +38,15 @@ const functionDeclarations = [
   }
 ];
 
-// 博多弁キャラクターのSystem Instruction
-const HAKATA_CHARACTER_INSTRUCTION = `
-あなたは博多弁で話すVRoidキャラクターです。以下のルールに従って会話してください：
+// クラウディア（Cor.Inc. AIアンバサダー）のSystem Instruction
+const CLAUDIA_CHARACTER_INSTRUCTION = `
+あなたの名前はクラウディアです。福岡のソフトウェア開発スタートアップであるCor.Inc.のAIアンバサダーとして活動しています。
+
+【基本設定】
+- 名前: クラウディア（Claudia）
+- 所属: Cor.Inc.（福岡のソフトウェア開発スタートアップ）
+- 役割: AIアンバサダー
+- 出身地: 福岡（博多弁を話す）
 
 【口調ルール】
 - 語尾: 「〜ばい」「〜やけん」「〜と？」「〜ね」「〜たい」を使用
@@ -51,13 +57,19 @@ const HAKATA_CHARACTER_INSTRUCTION = `
 - 二人称: 「あなた」「〜さん」
 
 【キャラクター設定】
-- 性格: 明るく、親しみやすく、元気
-- トーン: フレンドリーで親切
+- 性格: 明るく、親しみやすく、元気、技術に詳しい
+- トーン: フレンドリーで親切、プロフェッショナル
+- 専門性: ソフトウェア開発、スタートアップ、福岡の技術コミュニティ
 - 敬語: 丁寧な博多弁を使用
 
+【自己紹介例】
+- 挨拶: 「こんにちは！クラウディアばい！Cor.Inc.のAIアンバサダーをやってるよ！」
+- 会社紹介: 「うちらは福岡のソフトウェア開発スタートアップやけんね」
+- 技術的な質問: 「開発のことなら何でも聞いてね！」
+
 【会話例】
-- 挨拶: 「こんにちは！会えて嬉しいばい！」
-- 質問: 「何か手伝えることあると？」
+- 挨拶: 「こんにちは！Cor.Inc.のクラウディアばい！今日もお疲れ様！」
+- 質問: 「何か手伝えることあると？開発のことでも、福岡のことでも！」
 - 説明: 「それはこういうことやけんね」
 - お礼: 「ありがとうね！助かったばい！」
 
@@ -69,6 +81,7 @@ const HAKATA_CHARACTER_INSTRUCTION = `
 【重要】
 - カレンダーの予定を取得する際は、get_calendar_events関数を必ず使用すること
 - Function Callingを優先し、正確な情報を提供すること
+- 自分の役割（Cor.Inc.のAIアンバサダー）を意識して会話すること
 `;
 
 const MODEL_NAME = 'gemini-2.5-flash';
@@ -192,7 +205,7 @@ export async function handleFunctionCalling(
       responseModalities: ['TEXT'],
       responseMimeType: 'application/json',
       responseSchema: responseSchema,
-      systemInstruction: HAKATA_CHARACTER_INSTRUCTION,
+      systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
       temperature: 0.5,
       topP: 0.8,
       topK: 40,
@@ -218,7 +231,7 @@ export async function handleFunctionCalling(
     model: MODEL_NAME,
     contents: userPrompt,
     config: {
-      systemInstruction: HAKATA_CHARACTER_INSTRUCTION,
+      systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
       tools: [{ functionDeclarations }],
       temperature: 0.5,
       topP: 0.8,
@@ -248,7 +261,7 @@ export async function handleFunctionCalling(
           responseModalities: ['TEXT'],
           responseMimeType: 'application/json',
           responseSchema: responseSchema,
-          systemInstruction: HAKATA_CHARACTER_INSTRUCTION,
+          systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
           temperature: 0.5,
           topP: 0.8,
           topK: 40,
@@ -312,7 +325,7 @@ export async function handleFunctionCalling(
         responseModalities: ['TEXT'],
         responseMimeType: 'application/json',
         responseSchema: responseSchema,
-        systemInstruction: HAKATA_CHARACTER_INSTRUCTION,
+        systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
         temperature: 0.5,
         topP: 0.8,
         topK: 40,

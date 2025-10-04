@@ -42,9 +42,24 @@
       left: 10px;
       color: white;
       background: rgba(0,0,0,0.7);
-      padding: 10px;
+      padding: 8px 12px;
       font-family: sans-serif;
       z-index: 1000;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: opacity 0.3s ease;
+    }
+    #info h3 {
+      margin: 0 0 4px 0;
+      font-size: 16px;
+    }
+    #info p {
+      margin: 2px 0;
+      font-size: 13px;
+    }
+    #info.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -88,13 +103,18 @@
 
     scene.addEventListener('loaded', () => {
       const marker = document.querySelector('#marker');
+      const info = document.querySelector('#info');
 
       marker.addEventListener('markerFound', () => {
         document.querySelector('#status').textContent = 'マーカー検出！';
+        // マーカー検出時はインフォボックスを非表示
+        info.classList.add('hidden');
       });
 
       marker.addEventListener('markerLost', () => {
         document.querySelector('#status').textContent = 'マーカーが見えません';
+        // マーカー消失時はインフォボックスを表示
+        info.classList.remove('hidden');
       });
 
       document.querySelector('#status').textContent = '準備完了！';
