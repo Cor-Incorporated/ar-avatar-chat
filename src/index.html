@@ -117,22 +117,22 @@
 
   <a-scene
     embedded
-    arjs="sourceType: webcam; trackingMethod: best; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
+    arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
     vr-mode-ui="enabled: false"
   >
     <a-entity camera></a-entity>
 
-    <!-- ペンギンロゴカスタムマーカー (モバイル最適化: Smoothing有効 + 角度検出改善) -->
+    <!-- ペンギンロゴカスタムマーカー (モバイル最適化: 高解像度 + 低信頼度閾値) -->
     <a-marker 
       type="pattern" 
       url="./assets/markers/penguin-marker.patt" 
       id="marker"
       size="1"
       smooth="true"
-      smoothCount="10"
-      smoothTolerance="0.01"
-      smoothThreshold="5"
-      minConfidence="0.6"
+      smoothCount="5"
+      smoothTolerance="0.02"
+      smoothThreshold="2"
+      minConfidence="0.5"
     >
       <!-- ライト（モバイルGPU負荷低減のため最小限に） -->
       <a-light type="ambient" intensity="1.0"></a-light>
@@ -168,6 +168,19 @@
       // モバイル最適化: フルスクリーン要求（向きロックは削除）
       if (isMobile) {
         console.log('[Mobile] モバイルデバイス検出 - 最適化を適用（縦向きデフォルト）');
+        console.log('[Mobile] 画面サイズ:', window.innerWidth, 'x', window.innerHeight);
+        console.log('[Mobile] デバイスピクセル比:', window.devicePixelRatio);
+        
+        // カメラ解像度の確認
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then((stream) => {
+            const track = stream.getVideoTracks()[0];
+            const settings = track.getSettings();
+            console.log('[Camera] 実際の解像度:', settings.width, 'x', settings.height);
+            console.log('[Camera] フレームレート:', settings.frameRate);
+            track.stop();
+          })
+          .catch((err) => console.log('[Camera] 情報取得失敗:', err));
         
         // フルスクリーン要求（タップ時）
         document.addEventListener('click', () => {
@@ -189,7 +202,7 @@
         });
       }
 
-      // マーカー検出イベント（連続Lost検出追加 + 角度ログ）
+      // マーカー検出イベント（連続Lost検出追加 + 詳細ログ）
       marker.addEventListener('markerFound', (event) => {
         const now = new Date().toLocaleTimeString();
         lostCount = 0;  // 検出成功でリセット
@@ -197,13 +210,24 @@
         document.querySelector('#status').textContent = '✅ マーカー検出！';
         info.classList.add('hidden');
 
-        // マーカーの角度情報をログ出力（デバッグ用）
+        // マーカーの詳細情報をログ出力（デバッグ用）
         if (marker.object3D) {
+          const position = marker.object3D.position;
           const rotation = marker.object3D.rotation;
+          const scale = marker.object3D.scale;
+          
+          // 角度情報
           const angleX = Math.abs(rotation.x * 180 / Math.PI).toFixed(1);
           const angleY = Math.abs(rotation.y * 180 / Math.PI).toFixed(1);
           const angleZ = Math.abs(rotation.z * 180 / Math.PI).toFixed(1);
-          console.log(`[Marker] 検出成功 ${now} - 角度: X=${angleX}° Y=${angleY}° Z=${angleZ}°`);
+          
+          // 距離推定（Z軸の位置から）
+          const distance = Math.abs(position.z).toFixed(2);
+          
+          console.log(`[Marker] 検出成功 ${now}`);
+          console.log(`  角度: X=${angleX}° Y=${angleY}° Z=${angleZ}°`);
+          console.log(`  推定距離: ${distance}m (${(distance * 100).toFixed(0)}cm)`);
+          console.log(`  スケール: ${scale.x.toFixed(2)}`);
         } else {
           console.log(`[Marker] 検出成功 - ${now}`);
         }
