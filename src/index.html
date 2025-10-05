@@ -111,25 +111,28 @@
   <div id="info">
     <h3>🐧 Cor.Inc AR Demo</h3>
     <p>📸 名刺のペンギンロゴにカメラを向けてください</p>
+    <p style="font-size: 11px; color: #ffeb3b;">💡 斜め30-45度の角度でも検出します</p>
     <p id="status">⏳ 初期化中...</p>
   </div>
 
   <a-scene
     embedded
-    arjs="sourceType: webcam; trackingMethod: best; patternRatio: 0.80; maxDetectionRate: 30; debugUIEnabled: false;"
+    arjs="sourceType: webcam; trackingMethod: best; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
     vr-mode-ui="enabled: false"
   >
     <a-entity camera></a-entity>
 
-    <!-- ペンギンロゴカスタムマーカー (モバイル最適化: Smoothing有効) -->
+    <!-- ペンギンロゴカスタムマーカー (モバイル最適化: Smoothing有効 + 角度検出改善) -->
     <a-marker 
       type="pattern" 
       url="./assets/markers/penguin-marker.patt" 
       id="marker"
+      size="1"
       smooth="true"
       smoothCount="10"
       smoothTolerance="0.01"
       smoothThreshold="5"
+      minConfidence="0.6"
     >
       <!-- ライト（モバイルGPU負荷低減のため最小限に） -->
       <a-light type="ambient" intensity="1.0"></a-light>
@@ -186,14 +189,24 @@
         });
       }
 
-      // マーカー検出イベント（連続Lost検出追加）
-      marker.addEventListener('markerFound', () => {
+      // マーカー検出イベント（連続Lost検出追加 + 角度ログ）
+      marker.addEventListener('markerFound', (event) => {
         const now = new Date().toLocaleTimeString();
-        console.log(`[Marker] 検出成功 - ${now}`);
         lostCount = 0;  // 検出成功でリセット
         orientationWarningShown = false;  // 次回のために警告フラグリセット
         document.querySelector('#status').textContent = '✅ マーカー検出！';
         info.classList.add('hidden');
+
+        // マーカーの角度情報をログ出力（デバッグ用）
+        if (marker.object3D) {
+          const rotation = marker.object3D.rotation;
+          const angleX = Math.abs(rotation.x * 180 / Math.PI).toFixed(1);
+          const angleY = Math.abs(rotation.y * 180 / Math.PI).toFixed(1);
+          const angleZ = Math.abs(rotation.z * 180 / Math.PI).toFixed(1);
+          console.log(`[Marker] 検出成功 ${now} - 角度: X=${angleX}° Y=${angleY}° Z=${angleZ}°`);
+        } else {
+          console.log(`[Marker] 検出成功 - ${now}`);
+        }
 
         // VRM遅延ロード（初回検出時のみ）
         if (isMobile && !vrmLoaded && avatarEl) {
