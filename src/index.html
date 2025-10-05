@@ -65,6 +65,46 @@
       opacity: 0;
       pointer-events: none;
     }
+    /* モバイル最適化: 横向き警告ダイアログ */
+    #orientation-warning {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      z-index: 3000;
+      text-align: center;
+      font-size: 14px;
+      max-width: 320px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+    #orientation-warning p {
+      margin: 0 0 15px 0;
+      line-height: 1.5;
+    }
+    #orientation-warning button {
+      margin: 5px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    #orientation-warning button:first-of-type {
+      background: #4CAF50;
+      color: white;
+    }
+    #orientation-warning button:last-of-type {
+      background: #757575;
+      color: white;
+    }
+    #orientation-warning button:hover {
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body>
@@ -76,17 +116,24 @@
 
   <a-scene
     embedded
-    arjs="patternRatio: 0.80; debugUIEnabled: false;"
+    arjs="sourceType: webcam; sourceWidth: 640; sourceHeight: 480; trackingMethod: best; patternRatio: 0.5; maxDetectionRate: 30; debugUIEnabled: false;"
     vr-mode-ui="enabled: false"
   >
     <a-entity camera></a-entity>
 
-    <!-- ペンギンロゴカスタムマーカー (Pattern Ratio: 0.80) -->
-    <a-marker type="pattern" url="./assets/markers/penguin-marker.patt" id="marker">
-      <!-- ライト（マーカー内に配置） -->
-      <a-light type="ambient" intensity="0.9"></a-light>
-      <a-light type="directional" intensity="1.0" position="1 2 1"></a-light>
-      <a-light type="point" color="#ddddff" intensity="0.5" position="-1 2 1"></a-light>
+    <!-- ペンギンロゴカスタムマーカー (モバイル最適化: Smoothing有効) -->
+    <a-marker 
+      type="pattern" 
+      url="./assets/markers/penguin-marker.patt" 
+      id="marker"
+      smooth="true"
+      smoothCount="10"
+      smoothTolerance="0.01"
+      smoothThreshold="5"
+    >
+      <!-- ライト（モバイルGPU負荷低減のため最小限に） -->
+      <a-light type="ambient" intensity="1.0"></a-light>
+      <a-light type="directional" intensity="0.8" position="1 2 1"></a-light>
 
       <!-- VRMアバター -->
       <a-entity
@@ -104,24 +151,115 @@
     import { ChatController } from '/dist/src/controllers/ChatController.js';
 
     const scene = document.querySelector('a-scene');
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     scene.addEventListener('loaded', () => {
       const marker = document.querySelector('#marker');
       const info = document.querySelector('#info');
+      const avatarEl = document.querySelector('#avatar');
+      let vrmLoaded = false;
+      let lostCount = 0;  // 連続Lost検出カウンター
+      const maxLostThreshold = 5;  // 5回連続で横向き提案
+      let orientationWarningShown = false;  // 警告表示済みフラグ
 
+      // モバイル最適化: フルスクリーン要求（向きロックは削除）
+      if (isMobile) {
+        console.log('[Mobile] モバイルデバイス検出 - 最適化を適用（縦向きデフォルト）');
+        
+        // フルスクリーン要求（タップ時）
+        document.addEventListener('click', () => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch((err) => {
+              console.log('[Mobile] フルスクリーン要求失敗:', err);
+            });
+          }
+        }, { once: true });
+
+        // 向き変更イベント監視（縦向きデフォルト、強制なし）
+        window.addEventListener('orientationchange', () => {
+          const isLandscape = screen.orientation && screen.orientation.type.includes('landscape');
+          console.log(`[Orientation] 向き変更: ${isLandscape ? '横向き' : '縦向き'}`);
+          if (!isLandscape && lostCount > 0) {
+            lostCount = 0;  // 縦向きに戻ったらカウンターリセット
+            console.log('[Orientation] 縦向きに戻りました - Lostカウンターリセット');
+          }
+        });
+      }
+
+      // マーカー検出イベント（連続Lost検出追加）
       marker.addEventListener('markerFound', () => {
-        document.querySelector('#status').textContent = 'マーカー検出！';
-        // マーカー検出時はインフォボックスを非表示
+        const now = new Date().toLocaleTimeString();
+        console.log(`[Marker] 検出成功 - ${now}`);
+        lostCount = 0;  // 検出成功でリセット
+        orientationWarningShown = false;  // 次回のために警告フラグリセット
+        document.querySelector('#status').textContent = '✅ マーカー検出！';
         info.classList.add('hidden');
+
+        // VRM遅延ロード（初回検出時のみ）
+        if (isMobile && !vrmLoaded && avatarEl) {
+          console.log('[Mobile] VRM遅延ロード開始');
+          vrmLoaded = true;
+        }
       });
 
       marker.addEventListener('markerLost', () => {
-        document.querySelector('#status').textContent = 'マーカーが見えません';
-        // マーカー消失時はインフォボックスを表示
+        lostCount++;
+        console.log(`[Marker] 検出ロスト (${lostCount}/${maxLostThreshold})`);
+        document.querySelector('#status').textContent = '⏳ マーカーが見えません';
         info.classList.remove('hidden');
+
+        // 連続Lostで横向き警告（ユーザビリティ重視: 提案のみ）
+        if (isMobile && lostCount >= maxLostThreshold && !orientationWarningShown) {
+          console.log('[Marker] 連続Lost検出 - 横向き提案表示');
+          showOrientationWarning();
+          orientationWarningShown = true;
+          lostCount = 0;  // 警告後リセット
+        }
       });
 
-      document.querySelector('#status').textContent = '準備完了！';
+      // 横向き警告関数（トースト形式で非侵襲的）
+      function showOrientationWarning() {
+        // 既存の警告があれば削除
+        const existingWarning = document.getElementById('orientation-warning');
+        if (existingWarning) {
+          existingWarning.remove();
+        }
+
+        const warning = document.createElement('div');
+        warning.id = 'orientation-warning';
+        warning.innerHTML = `
+          <p>📱 マーカー検出が難しい場合、横向きをお試しください（任意）</p>
+          <button id="switch-landscape">横向きに切り替え</button>
+          <button id="stay-portrait">このまま続ける</button>
+        `;
+        document.body.appendChild(warning);
+
+        // ボタンイベント
+        document.getElementById('switch-landscape').addEventListener('click', () => {
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch((err) => {
+              console.log('[Orientation] 横向きロック失敗:', err);
+              alert('この機種では画面の向きをロックできません。手動で横向きにしてください。');
+            });
+          }
+          warning.remove();
+        });
+
+        document.getElementById('stay-portrait').addEventListener('click', () => {
+          console.log('[Orientation] ユーザーが縦向きを選択');
+          warning.remove();
+        });
+
+        // 5秒後自動消去
+        setTimeout(() => {
+          if (document.getElementById('orientation-warning')) {
+            warning.remove();
+            console.log('[Orientation] 警告タイムアウト - 自動削除');
+          }
+        }, 8000);
+      }
+
+      document.querySelector('#status').textContent = '✨ 準備完了！';
 
       // ボトムシートUIとチャットコントローラーを初期化
       // Vercel環境用：環境に応じてAPI URLを自動切り替え
@@ -130,23 +268,25 @@
         : '/api/chat';
       
       console.log('[Init] API URL:', apiUrl);
+      console.log('[Init] モバイル:', isMobile);
       const chatController = new ChatController(apiUrl);
 
-      console.log('ボトムシートUIが初期化されました');
-    });
+      console.log('[Init] ボトムシートUIが初期化されました');
 
-    window.addEventListener('error', (e) => {
-      if (e.message && e.message.includes('camera')) {
-        document.querySelector('#status').textContent = 'カメラへのアクセスを許可してください';
+      // VRMロードエラーハンドリング
+      if (avatarEl) {
+        avatarEl.addEventListener('vrm-load-error', () => {
+          document.querySelector('#status').textContent = '❌ アバターのロードに失敗しました';
+        });
       }
     });
 
-    const avatarEl = document.querySelector('#avatar');
-    if (avatarEl) {
-      avatarEl.addEventListener('vrm-load-error', () => {
-        document.querySelector('#status').textContent = 'アバターのロードに失敗しました';
-      });
-    }
+    // カメラアクセスエラーハンドリング
+    window.addEventListener('error', (e) => {
+      if (e.message && e.message.includes('camera')) {
+        document.querySelector('#status').textContent = '📷 カメラへのアクセスを許可してください';
+      }
+    });
   </script>
 </body>
 </html>
