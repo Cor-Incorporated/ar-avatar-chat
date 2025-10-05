@@ -105,6 +105,20 @@
     #orientation-warning button:hover {
       opacity: 0.8;
     }
+    /* A-Frame Stats（パフォーマンス監視） */
+    .a-canvas {
+      z-index: 0;
+    }
+    .rs-base {
+      position: fixed !important;
+      bottom: 10px !important;
+      top: auto !important;
+      right: 10px !important;
+      left: auto !important;
+      z-index: 999 !important;
+      opacity: 0.8 !important;
+      font-size: 9px !important;
+    }
   </style>
 </head>
 <body>
@@ -119,6 +133,7 @@
     embedded
     arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
     vr-mode-ui="enabled: false"
+    stats
   >
     <a-entity camera></a-entity>
 
@@ -171,16 +186,32 @@
         console.log('[Mobile] 画面サイズ:', window.innerWidth, 'x', window.innerHeight);
         console.log('[Mobile] デバイスピクセル比:', window.devicePixelRatio);
         
-        // カメラ解像度の確認
-        navigator.mediaDevices.getUserMedia({ video: true })
+        // カメラ解像度の確認とフォールバック警告
+        navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 1280, min: 640 }, 
+            height: { ideal: 960, min: 480 } 
+          } 
+        })
           .then((stream) => {
             const track = stream.getVideoTracks()[0];
             const settings = track.getSettings();
             console.log('[Camera] 実際の解像度:', settings.width, 'x', settings.height);
             console.log('[Camera] フレームレート:', settings.frameRate);
+            
+            // 解像度フォールバック警告
+            if (settings.width < 1280 || settings.height < 960) {
+              console.warn('[Camera] ⚠️ 高解像度が利用不可、フォールバック動作中');
+              console.warn('[Camera] 検出距離が短くなる可能性があります');
+              document.querySelector('#status').textContent = '⚠️ カメラ解像度制限あり';
+            }
+            
             track.stop();
           })
-          .catch((err) => console.log('[Camera] 情報取得失敗:', err));
+          .catch((err) => {
+            console.error('[Camera] カメラアクセス失敗:', err);
+            document.querySelector('#status').textContent = '❌ カメラエラー';
+          });
         
         // フルスクリーン要求（タップ時）
         document.addEventListener('click', () => {
@@ -205,6 +236,14 @@
       // マーカー検出イベント（連続Lost検出追加 + 詳細ログ）
       marker.addEventListener('markerFound', (event) => {
         const now = new Date().toLocaleTimeString();
+        
+        // minConfidenceを初期値に戻す（検出成功時）
+        const currentConfidence = marker.getAttribute('minConfidence');
+        if (currentConfidence < 0.5) {
+          marker.setAttribute('minConfidence', 0.5);
+          console.log('[Marker] 感度リセット: minConfidence → 0.5');
+        }
+        
         lostCount = 0;  // 検出成功でリセット
         orientationWarningShown = false;  // 次回のために警告フラグリセット
         document.querySelector('#status').textContent = '✅ マーカー検出！';
@@ -244,6 +283,21 @@
         console.log(`[Marker] 検出ロスト (${lostCount}/${maxLostThreshold})`);
         document.querySelector('#status').textContent = '⏳ マーカーが見えません';
         info.classList.remove('hidden');
+
+        // 動的minConfidence調整（連続Lost時に感度を上げる）
+        if (lostCount === 3) {
+          const currentConfidence = marker.getAttribute('minConfidence');
+          if (currentConfidence >= 0.5) {
+            marker.setAttribute('minConfidence', 0.45);
+            console.log('[Marker] 感度向上: minConfidence 0.5 → 0.45');
+          }
+        } else if (lostCount === 7) {
+          const currentConfidence = marker.getAttribute('minConfidence');
+          if (currentConfidence >= 0.45) {
+            marker.setAttribute('minConfidence', 0.4);
+            console.log('[Marker] 感度さらに向上: minConfidence 0.45 → 0.4');
+          }
+        }
 
         // 連続Lostで横向き警告（ユーザビリティ重視: 提案のみ）
         if (isMobile && lostCount >= maxLostThreshold && !orientationWarningShown) {
