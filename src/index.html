@@ -105,31 +105,50 @@
     #orientation-warning button:hover {
       opacity: 0.8;
     }
+    /* A-Frame Stats（パフォーマンス監視） */
+    .a-canvas {
+      z-index: 0;
+    }
+    .rs-base {
+      position: fixed !important;
+      bottom: 10px !important;
+      top: auto !important;
+      right: 10px !important;
+      left: auto !important;
+      z-index: 999 !important;
+      opacity: 0.8 !important;
+      font-size: 9px !important;
+    }
   </style>
 </head>
 <body>
   <div id="info">
     <h3>🐧 Cor.Inc AR Demo</h3>
     <p>📸 名刺のペンギンロゴにカメラを向けてください</p>
+    <p style="font-size: 11px; color: #ffeb3b;">💡 斜め30-45度の角度でも検出します</p>
     <p id="status">⏳ 初期化中...</p>
+    <p id="debug-mode-indicator" style="display: none; font-size: 10px; color: #ff6b6b; margin-top: 4px;">🔍 デバッグモード有効</p>
   </div>
 
   <a-scene
     embedded
-    arjs="sourceType: webcam; sourceWidth: 640; sourceHeight: 480; trackingMethod: best; patternRatio: 0.5; maxDetectionRate: 30; debugUIEnabled: false;"
+    arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
     vr-mode-ui="enabled: false"
+    id="ar-scene"
   >
     <a-entity camera></a-entity>
 
-    <!-- ペンギンロゴカスタムマーカー (モバイル最適化: Smoothing有効) -->
+    <!-- ペンギンロゴカスタムマーカー (モバイル最適化: 高解像度 + 低信頼度閾値) -->
     <a-marker 
       type="pattern" 
       url="./assets/markers/penguin-marker.patt" 
       id="marker"
+      size="1"
       smooth="true"
-      smoothCount="10"
-      smoothTolerance="0.01"
-      smoothThreshold="5"
+      smoothCount="5"
+      smoothTolerance="0.02"
+      smoothThreshold="2"
+      minConfidence="0.5"
     >
       <!-- ライト（モバイルGPU負荷低減のため最小限に） -->
       <a-light type="ambient" intensity="1.0"></a-light>
@@ -152,6 +171,30 @@
 
     const scene = document.querySelector('a-scene');
     const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    // デバッグモード（URLパラメータ ?debug=true で有効化）
+    const urlParams = new URLSearchParams(window.location.search);
+    const DEBUG_MODE = urlParams.get('debug') === 'true';
+    
+    // デバッグログ関数
+    const debugLog = (...args) => {
+      if (DEBUG_MODE) console.log(...args);
+    };
+    const debugWarn = (...args) => {
+      if (DEBUG_MODE) console.warn(...args);
+    };
+    // エラーログは常に出力
+    const errorLog = (...args) => console.error(...args);
+
+    // デバッグモード通知とStats有効化
+    if (DEBUG_MODE) {
+      document.getElementById('debug-mode-indicator').style.display = 'block';
+      // Stats（FPS表示）を有効化
+      scene.setAttribute('stats', '');
+      console.log('🔍 デバッグモード有効 - 詳細ログとStatsを表示します');
+      console.log('   本番環境では ?debug=true を削除してください');
+      console.log('   使用方法: https://your-domain.com/?debug=true');
+    }
 
     scene.addEventListener('loaded', () => {
       const marker = document.querySelector('#marker');
@@ -164,13 +207,43 @@
 
       // モバイル最適化: フルスクリーン要求（向きロックは削除）
       if (isMobile) {
-        console.log('[Mobile] モバイルデバイス検出 - 最適化を適用（縦向きデフォルト）');
+        debugLog('[Mobile] モバイルデバイス検出 - 最適化を適用（縦向きデフォルト）');
+        debugLog('[Mobile] 画面サイズ:', window.innerWidth, 'x', window.innerHeight);
+        debugLog('[Mobile] デバイスピクセル比:', window.devicePixelRatio);
+        
+        // カメラ解像度の確認とフォールバック警告
+        navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 1280, min: 640 }, 
+            height: { ideal: 960, min: 480 } 
+          } 
+        })
+          .then((stream) => {
+            const track = stream.getVideoTracks()[0];
+            const settings = track.getSettings();
+            debugLog('[Camera] 実際の解像度:', settings.width, 'x', settings.height);
+            debugLog('[Camera] フレームレート:', settings.frameRate);
+            
+            // 解像度フォールバック警告（ユーザーに重要な情報はUI表示）
+            if (settings.width < 1280 || settings.height < 960) {
+              debugWarn('[Camera] ⚠️ 高解像度が利用不可、フォールバック動作中');
+              debugWarn('[Camera] 検出距離が短くなる可能性があります');
+              // ユーザー向けは簡潔に
+              document.querySelector('#status').textContent = '⚠️ 解像度制限';
+            }
+            
+            track.stop();
+          })
+          .catch((err) => {
+            errorLog('[Camera] カメラアクセス失敗:', err);
+            document.querySelector('#status').textContent = '❌ カメラエラー';
+          });
         
         // フルスクリーン要求（タップ時）
         document.addEventListener('click', () => {
           if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch((err) => {
-              console.log('[Mobile] フルスクリーン要求失敗:', err);
+              debugLog('[Mobile] フルスクリーン要求失敗:', err);
             });
           }
         }, { once: true });
@@ -178,39 +251,81 @@
         // 向き変更イベント監視（縦向きデフォルト、強制なし）
         window.addEventListener('orientationchange', () => {
           const isLandscape = screen.orientation && screen.orientation.type.includes('landscape');
-          console.log(`[Orientation] 向き変更: ${isLandscape ? '横向き' : '縦向き'}`);
+          debugLog(`[Orientation] 向き変更: ${isLandscape ? '横向き' : '縦向き'}`);
           if (!isLandscape && lostCount > 0) {
             lostCount = 0;  // 縦向きに戻ったらカウンターリセット
-            console.log('[Orientation] 縦向きに戻りました - Lostカウンターリセット');
+            debugLog('[Orientation] 縦向きに戻りました - Lostカウンターリセット');
           }
         });
       }
 
-      // マーカー検出イベント（連続Lost検出追加）
-      marker.addEventListener('markerFound', () => {
+      // マーカー検出イベント（連続Lost検出追加 + 詳細ログ）
+      marker.addEventListener('markerFound', (event) => {
         const now = new Date().toLocaleTimeString();
-        console.log(`[Marker] 検出成功 - ${now}`);
+        
+        // minConfidenceを初期値に戻す（検出成功時）
+        const currentConfidence = marker.getAttribute('minConfidence');
+        if (currentConfidence < 0.5) {
+          marker.setAttribute('minConfidence', 0.5);
+          debugLog('[Marker] 感度リセット: minConfidence → 0.5');
+        }
+        
         lostCount = 0;  // 検出成功でリセット
         orientationWarningShown = false;  // 次回のために警告フラグリセット
         document.querySelector('#status').textContent = '✅ マーカー検出！';
         info.classList.add('hidden');
 
+        // マーカーの詳細情報をログ出力（デバッグ用）
+        if (DEBUG_MODE && marker.object3D) {
+          const position = marker.object3D.position;
+          const rotation = marker.object3D.rotation;
+          const scale = marker.object3D.scale;
+          
+          // 角度情報
+          const angleX = Math.abs(rotation.x * 180 / Math.PI).toFixed(1);
+          const angleY = Math.abs(rotation.y * 180 / Math.PI).toFixed(1);
+          const angleZ = Math.abs(rotation.z * 180 / Math.PI).toFixed(1);
+          
+          // 距離推定（Z軸の位置から）
+          const distance = Math.abs(position.z).toFixed(2);
+          
+          debugLog(`[Marker] 検出成功 ${now}`);
+          debugLog(`  角度: X=${angleX}° Y=${angleY}° Z=${angleZ}°`);
+          debugLog(`  推定距離: ${distance}m (${(distance * 100).toFixed(0)}cm)`);
+          debugLog(`  スケール: ${scale.x.toFixed(2)}`);
+        }
+
         // VRM遅延ロード（初回検出時のみ）
         if (isMobile && !vrmLoaded && avatarEl) {
-          console.log('[Mobile] VRM遅延ロード開始');
+          debugLog('[Mobile] VRM遅延ロード開始');
           vrmLoaded = true;
         }
       });
 
       marker.addEventListener('markerLost', () => {
         lostCount++;
-        console.log(`[Marker] 検出ロスト (${lostCount}/${maxLostThreshold})`);
+        debugLog(`[Marker] 検出ロスト (${lostCount}/${maxLostThreshold})`);
         document.querySelector('#status').textContent = '⏳ マーカーが見えません';
         info.classList.remove('hidden');
 
+        // 動的minConfidence調整（連続Lost時に感度を上げる）
+        if (lostCount === 3) {
+          const currentConfidence = marker.getAttribute('minConfidence');
+          if (currentConfidence >= 0.5) {
+            marker.setAttribute('minConfidence', 0.45);
+            debugLog('[Marker] 感度向上: minConfidence 0.5 → 0.45');
+          }
+        } else if (lostCount === 7) {
+          const currentConfidence = marker.getAttribute('minConfidence');
+          if (currentConfidence >= 0.45) {
+            marker.setAttribute('minConfidence', 0.4);
+            debugLog('[Marker] 感度さらに向上: minConfidence 0.45 → 0.4');
+          }
+        }
+
         // 連続Lostで横向き警告（ユーザビリティ重視: 提案のみ）
         if (isMobile && lostCount >= maxLostThreshold && !orientationWarningShown) {
-          console.log('[Marker] 連続Lost検出 - 横向き提案表示');
+          debugLog('[Marker] 連続Lost検出 - 横向き提案表示');
           showOrientationWarning();
           orientationWarningShown = true;
           lostCount = 0;  // 警告後リセット
@@ -238,7 +353,7 @@
         document.getElementById('switch-landscape').addEventListener('click', () => {
           if (screen.orientation && screen.orientation.lock) {
             screen.orientation.lock('landscape').catch((err) => {
-              console.log('[Orientation] 横向きロック失敗:', err);
+              debugLog('[Orientation] 横向きロック失敗:', err);
               alert('この機種では画面の向きをロックできません。手動で横向きにしてください。');
             });
           }
@@ -246,15 +361,15 @@
         });
 
         document.getElementById('stay-portrait').addEventListener('click', () => {
-          console.log('[Orientation] ユーザーが縦向きを選択');
+          debugLog('[Orientation] ユーザーが縦向きを選択');
           warning.remove();
         });
 
-        // 5秒後自動消去
+        // 8秒後自動消去
         setTimeout(() => {
           if (document.getElementById('orientation-warning')) {
             warning.remove();
-            console.log('[Orientation] 警告タイムアウト - 自動削除');
+            debugLog('[Orientation] 警告タイムアウト - 自動削除');
           }
         }, 8000);
       }
@@ -267,11 +382,12 @@
         ? 'http://localhost:3000/api/chat'
         : '/api/chat';
       
-      console.log('[Init] API URL:', apiUrl);
-      console.log('[Init] モバイル:', isMobile);
+      debugLog('[Init] API URL:', apiUrl);
+      debugLog('[Init] モバイル:', isMobile);
+      debugLog('[Init] デバッグモード:', DEBUG_MODE);
       const chatController = new ChatController(apiUrl);
 
-      console.log('[Init] ボトムシートUIが初期化されました');
+      debugLog('[Init] ボトムシートUIが初期化されました');
 
       // VRMロードエラーハンドリング
       if (avatarEl) {
