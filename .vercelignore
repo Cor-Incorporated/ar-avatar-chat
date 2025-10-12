@@ -1,24 +1,6 @@
-# Dependencies
-node_modules/
-server/node_modules/
-
-# Documentation
+# Vercelにデプロイ不要なファイル
 docs/
-
-# Development files
-.DS_Store
-*.log
-.vscode/
-.idea/
-
-# Environment files (use Vercel dashboard)
-.env
-.env.local
-server/.env
-
-# Git
-.git/
-
-# Python scripts
-*.py
-
+CLAUDE.md
+KNOWN_ISSUES.md
+IMPLEMENTATION_SUMMARY.md
+generate_marker.py
