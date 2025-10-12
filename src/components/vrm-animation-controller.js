@@ -33,7 +33,8 @@
  */
 
 const THREE = AFRAME.THREE;
-import { loadVRMAnimation } from '../lib/VRMAnimation/loadVRMAnimation.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 
 AFRAME.registerComponent('vrm-animation-controller', {
   schema: {},
@@ -136,50 +137,56 @@ AFRAME.registerComponent('vrm-animation-controller', {
    * 
    * @description
    * 【重要】本メソッドがボーン命名規則に依存しない柔軟性の核心部分。
-   * 
-   * three-vrm v2.1.0のVRMAnimation APIを使用してリターゲティングを実現：
-   * 1. GLTFLoaderでVRMAファイルを読み込み
-   * 2. VRMC_vrm_animation拡張からhumanoidボーンマッピングを取得
-   * 3. VRMAnimationクラスでAnimationClipを生成（リターゲティング実行）
+   *
+   * Phase 7: 公式@pixiv/three-vrm-animation@3.4.2を使用してリターゲティングを実現：
+   * 1. GLTFLoaderにVRMAnimationLoaderPluginを登録
+   * 2. VRMAファイルを読み込み、VRMC_vrm_animation拡張からhumanoidボーンマッピングを取得
+   * 3. createVRMAnimationClip()でAnimationClipを生成（リターゲティング実行）
    * 4. VRMモデルのヒューマノイド構造に適合したアニメーションが完成
-   * 
+   *
    * これにより、以下の全ての命名規則が動作：
    * - Mixamo: mixamorig:Hips, mixamorig:Spine
    * - VRM標準: J_Bip_C_Hips, J_Bip_C_Spine
    * - カスタム: l_up_leg, r_up_arm, torso_1
-   * 
+   *
    * @example
    * // Mixamo形式のVRMAファイル
    * await loadAnimation('happy', './LyingDown.vrma');
-   * 
-   * // VRM標準形式のVRMAファイル  
+   *
+   * // VRM標準形式のVRMAファイル
    * await loadAnimation('sad', './VRMA_01.vrma');
-   * 
+   *
    * // カスタム形式のVRMAファイル
    * await loadAnimation('neutral', './idle_loop.vrma');
-   * 
+   *
    * // どれも同じVRMモデルで正しく再生される！
    */
   async loadAnimation(emotion, path) {
     try {
-      // === ステップ1: VRMAファイルの読み込み ===
-      // loadVRMAnimationはGLTFLoaderにVRMAnimationLoaderPluginを自動登録し、
-      // humanoidボーンマッピングを解析してVRMAnimationオブジェクトを返す
-      const vrmAnimation = await loadVRMAnimation(path);
+      // === ステップ1: GLTFLoaderの準備 ===
+      // 公式VRMAnimationLoaderPluginを登録
+      const loader = new GLTFLoader();
+      loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+
+      // === ステップ2: VRMAファイルの読み込み ===
+      // VRMAnimationLoaderPluginがhumanoidボーンマッピングを解析し、
+      // gltf.userData.vrmAnimationsに格納
+      const gltf = await loader.loadAsync(path);
+      const vrmAnimation = gltf.userData.vrmAnimations?.[0];
 
       if (!vrmAnimation) {
-        throw new Error('VRMAnimationデータが見つかりません');
+        throw new Error('VRMAnimationデータが見つかりません（VRMC_vrm_animation拡張を確認してください）');
       }
 
       this.vrmAnimations[emotion] = vrmAnimation;
 
-      // === ステップ2: リターゲティング処理 ===
-      // VRMAnimation.createAnimationClipが魔法を実行：
+      // === ステップ3: リターゲティング処理 ===
+      // createVRMAnimationClipが魔法を実行：
       // - VRMAのhumanoidボーンマッピングを使用
       // - ボーン名をVRMモデルのhumanoid構造に自動変換
       // - ワールド座標変換を適用
       // - mixamorig:Hips → J_Bip_C_Hips などの変換が自動で実行される
-      const clip = vrmAnimation.createAnimationClip(this.vrm);
+      const clip = createVRMAnimationClip(vrmAnimation, this.vrm);
 
       if (!clip) {
         throw new Error('AnimationClipの作成に失敗しました');
