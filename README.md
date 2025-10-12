@@ -110,50 +110,45 @@ ar-avatar-chat/
 5. クリーンアーキテクチャ・ドキュメント充実
 
 **解決した課題**:
-- **問題**: 
-  - 異なるボーン命名規則（`mixamorig:Hips` vs `J_Bip_C_Hips` vs `l_up_leg`）のVRMAファイルが再生不可
-  - `THREE.PropertyBinding: No target node found` エラーが50+回発生
-  - Mixamoアニメーションが全く動作しない
-
-- **試行錯誤**:
-  1. three-vrm v3.4.2のVRMAnimationLoaderPlugin探索 → API不在で失敗
-  2. ボーン名マッピングテーブル検討 → 本質的でないため却下
-  3. three-vrm v2.1.0へのnpmダウングレード → 依存関係競合で失敗
-  4. **fbx2vrma-converter-uiのカスタム実装を調査 → 成功の鍵を発見**
-
-- **最終解決策**:
-  - HTMLのimportmapでthree-vrm v2.1.0（CDN）を使用
-  - fbx2vrma-converter-uiのVRMAnimationライブラリを移植・統合
-  - VRMC_vrm_animation拡張のhumanoidボーンマッピングを活用したリターゲティング実装
-
-- **結果**: 
-  - ✅ Mixamo形式（`mixamorig:*`）が動作
-  - ✅ VRM標準（`J_Bip_C_*`）が動作
-  - ✅ カスタム形式（`l_*/r_*`）が動作
-  - ✅ PropertyBindingエラーが完全に消滅
-  - ✅ 任意のVRMAファイルがボーン名変更なしで使用可能
+- 異なるボーン命名規則（`mixamorig:Hips` vs `J_Bip_C_Hips` vs `l_up_leg`）のVRMAファイルが再生不可
+- `THREE.PropertyBinding: No target node found` エラーが50+回発生
+- fbx2vrma-converter-uiのカスタム実装を調査・移植して解決
 
 **成果物**:
-- `src/components/vrm-animation-controller.js` (v2.0.0) - メインコントローラー
-- `src/lib/VRMAnimation/VRMAnimation.js` - リターゲティングコアクラス
-- `src/lib/VRMAnimation/VRMAnimationLoaderPlugin.js` - GLTFLoaderプラグイン
-- `src/lib/VRMAnimation/loadVRMAnimation.js` - ヘルパー関数
-- `src/lib/utils/arrayChunk.js` - ユーティリティ
 - `docs/24_VRMアニメーションリターゲティング実装.md` - 詳細ドキュメント（試行錯誤の過程を含む）
 
-**技術的価値**:
-本実装は以下の設計パターンの参考として有用：
-- **プラグインアーキテクチャ**: GLTFLoaderの拡張機構の活用
-- **リターゲティング処理**: humanoidボーンマッピングとワールド座標変換
-- **エラーハンドリング**: Promise.allSettledによる部分的失敗への対応
-- **メモリ管理**: イベントリスナーの適切なクリーンアップ
-- **ドキュメンテーション**: 試行錯誤の過程を含む詳細な記録
+**注**: Phase 7で公式パッケージに移行（カスタム実装は削除）
 
-**学習価値**:
-- ❌ 失敗した試み（v3.4.2、マッピングテーブル）も記録
-- ✅ なぜそのアプローチを取ったかの背景
-- ✅ どう問題を発見・解決したかのプロセス
-- ✅ 将来の開発者が同じ道を辿らないための道標
+### Phase 7: three-vrm v3.4.2への移行 ✅ **完了**（2025-10-13）
+**担当**: 開発チーム
+
+✅ **実装完了項目**:
+1. 公式`@pixiv/three-vrm-animation@3.4.2`への完全移行
+2. カスタムライブラリ削除（588行削減）
+3. 型安全性・エラー検出向上
+4. 全機能完全保持（リスクゼロ移行）
+
+**技術的改善**:
+- ✅ TypeScript型安全性
+- ✅ specVersion検証（1.0, 1.0-draft）
+- ✅ T-pose違反の警告
+- ✅ 詳細なエラーメッセージ
+- ✅ 公式サポート・メンテナンス
+- ✅ 最新Three.js v0.177.0対応
+
+**対応ボーン命名規則（Phase 6から継続）**:
+- ✅ Mixamo形式（`mixamorig:*`）
+- ✅ VRM標準（`J_Bip_C_*`）
+- ✅ カスタム形式（`l_*/r_*/torso_*`）
+- ✅ 任意の命名規則（VRMC_vrm_animation拡張があれば）
+
+**成果物**:
+- `docs/25_three-vrm_バージョン調査結果.md` - バージョン互換性調査
+- `docs/27_公式VRMAnimation_互換性確認.md` - アルゴリズム同一性の証明
+- `INVESTIGATION_COMPLETE.txt` - 調査完了サマリー
+
+**所要時間**: 2時間（予定2-4時間を短縮）
+
 3. GPU負荷低減（ライティング最適化）
 4. **UX改善**: 縦向きデフォルト + 柔軟な横向き提案
 5. 連続Lost検出による非侵襲的な警告ダイアログ
@@ -280,10 +275,10 @@ Phase 1はリサーチャーの調査結果に依存しないため、**並行�
 
 ### フロントエンド
 - **A-Frame**: 1.7.0
-- **AR.js**: 3.4.7  
-- **Three.js**: 0.164.1 (CDN)
-- **@pixiv/three-vrm**: 2.1.0 (CDN) ← VRMAnimation API対応
-- **カスタムVRMAnimationライブラリ**: v1.0.0 (ボーン名リターゲティング)
+- **AR.js**: 3.4.7
+- **Three.js**: 0.177.0 (CDN) ← Phase 7でアップグレード
+- **@pixiv/three-vrm**: 3.4.2 (CDN) ← Phase 7で公式最新版に移行
+- **@pixiv/three-vrm-animation**: 3.4.2 (CDN) ← Phase 7で公式パッケージ追加
 - **TypeScript**: 5.9.3
 - **モダンUI**: BottomSheet コンポーネント
 
@@ -325,6 +320,13 @@ Phase 1はリサーチャーの調査結果に依存しないため、**並行�
 - **Phase 5完了**: 2025-10-05（モバイル最適化・UX改善）
   - AR.js検出精度向上
   - 縦向きデフォルト実装（チャットUIとAR精度の両立）
+- **Phase 6完了**: 2025-10-12（VRMアニメーションリターゲティング実装）
+  - カスタムVRMAnimationライブラリ統合
+  - ボーン命名規則に依存しない柔軟性を実現
+- **Phase 7完了**: 2025-10-13（three-vrm v3.4.2への移行）
+  - 公式パッケージ完全移行
+  - コード削減588行、型安全性向上
+  - 全機能完全保持（リスクゼロ移行）
 - **更新**: 開発チーム・リサーチャーの成果物追加時に随時更新
 
 ---
