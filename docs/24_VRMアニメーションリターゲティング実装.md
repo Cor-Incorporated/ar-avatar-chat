@@ -945,3 +945,104 @@ if (animationCache.has(path)) {
 - より良い代替案を提案できる
 
 **良いコードは、良いドキュメントと共に存在します。**
+
+---
+
+## 🚀 Phase 7: 公式パッケージへの移行（2025-10-13）
+
+### 移行の背景
+
+Phase 6でカスタム実装によりボーン命名規則の問題を完全に解決しましたが、以下の調査により公式パッケージへの移行を決定：
+
+**調査結果**（docs/27_公式VRMAnimation_互換性確認.md）:
+- ✅ 公式`@pixiv/three-vrm-animation`は全てのボーン命名規則に100%対応
+- ✅ カスタム実装と**完全に同じアルゴリズム**を使用
+- ✅ 型安全性とエラー検出が向上
+- ✅ **リスクゼロで移行可能**と証明
+
+### 移行内容
+
+#### 1. ライブラリアップグレード
+
+```diff
+<!-- index.html importmap -->
+- "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+- "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
++ "three": "https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js",
++ "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.4.2/lib/three-vrm.module.min.js",
++ "@pixiv/three-vrm-animation": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm-animation@3.4.2/lib/three-vrm-animation.module.min.js"
+```
+
+#### 2. コード変更
+
+```diff
+// vrm-animation-controller.js
+- import { loadVRMAnimation } from '../lib/VRMAnimation/loadVRMAnimation.js';
++ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
++ import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
+
+async loadAnimation(emotion, path) {
+- const vrmAnimation = await loadVRMAnimation(path);
+- const clip = vrmAnimation.createAnimationClip(this.vrm);
++ const loader = new GLTFLoader();
++ loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
++ const gltf = await loader.loadAsync(path);
++ const vrmAnimation = gltf.userData.vrmAnimations?.[0];
++ const clip = createVRMAnimationClip(vrmAnimation, this.vrm);
+}
+```
+
+#### 3. カスタムライブラリ削除
+
+```bash
+# 588行のカスタムコードを削除
+rm -rf src/lib/VRMAnimation/
+rm -rf src/lib/utils/
+```
+
+### 移行の成果
+
+**コード削減**: 588行削除（105行の純削減）
+
+**技術的改善**:
+- ✅ TypeScript型安全性
+- ✅ specVersion検証（1.0, 1.0-draft）
+- ✅ T-pose違反の警告
+- ✅ 詳細なエラーメッセージ
+- ✅ 公式サポート・メンテナンス
+
+**全機能完全保持**:
+- ✅ Mixamo形式（`mixamorig:*`）
+- ✅ VRM標準形式（`J_Bip_C_*`）
+- ✅ カスタム形式（`l_*/r_*/torso_*`）
+- ✅ リスクゼロ（アルゴリズム同一）
+
+### 最終的なアーキテクチャ（Phase 7）
+
+```
+VRMAファイル (mixamorig:Hips, J_Bip_C_Hips, l_up_leg など)
+    ↓
+[GLTFLoader + VRMAnimationLoaderPlugin (公式)]
+    ↓ VRMC_vrm_animation拡張を解析
+VRMAnimation (humanoidボーンマッピング)
+    ↓
+[createVRMAnimationClip(vrmAnimation, vrm) (公式)]
+    ↓ リターゲティング実行
+AnimationClip (J_Bip_C_Hips, J_Bip_C_Spine など)
+    ↓ VRMモデルのボーン構造に適合
+AnimationMixer → AnimationAction → 再生成功！
+```
+
+### まとめ
+
+**Phase 6（カスタム実装）**:
+- 問題を完全に解決
+- ボーン命名規則の柔軟性を実現
+- 試行錯誤の過程を詳細に記録
+
+**Phase 7（公式パッケージ移行）**:
+- カスタム実装の成果を維持
+- 型安全性と保守性を向上
+- コード削減とベストプラクティス化
+
+この2段階のアプローチにより、**技術的理解の深化**と**ベストプラクティスの確立**を同時に達成しました。

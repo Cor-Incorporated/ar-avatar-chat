@@ -24,8 +24,9 @@ AFRAME.registerComponent('vrm-loader', {
         throw new Error('VRMデータが見つかりません');
       }
 
-      // 不要なジョイント削除（パフォーマンス最適化）
-      VRMUtils.removeUnnecessaryJoints(gltf.scene);
+      // スケルトン結合（パフォーマンス最適化）
+      // Phase 7: removeUnnecessaryJointsは非推奨、combineSkeletonsを使用
+      VRMUtils.combineSkeletons(gltf.scene);
 
       // Three.js複数インスタンス問題の回避：
       // setObject3Dの代わりに直接object3Dに追加
