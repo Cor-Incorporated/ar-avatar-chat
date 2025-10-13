@@ -65,13 +65,13 @@ AFRAME.registerComponent('vrm-animation-controller', {
     // 注：この実装により、異なる命名規則のVRMAファイルも使用可能
     // 実証済み: Mixamo (mixamorig:*), VRM標準 (J_Bip_C_*), カスタム (l_*/r_*)
     this.emotionToAnimation = {
-      'neutral': './assets/animations/VRMA_01.vrma',    // Mixamo形式（mixamorig:*）
-      'happy': './assets/animations/VRMA_02.vrma',        // VRM標準形式（J_Bip_C_*）
-      'angry': './assets/animations/VRMA_03.vrma',        // VRM標準形式
-      'sad': './assets/animations/VRMA_04.vrma',          // VRM標準形式
-      'relaxed': './assets/animations/VRMA_05.vrma',      // VRM標準形式
-      'surprised': './assets/animations/VRMA_06.vrma',    // VRM標準形式
-      'thinking': './assets/animations/VRMA_07.vrma'      // VRM標準形式
+      'neutral': './assets/animations/neutral.vrma',    // 新しいモーション
+      'happy': './assets/animations/happy.vrma',        // 新しいモーション
+      'angry': './assets/animations/angry.vrma',        // 新しいモーション
+      'sad': './assets/animations/sad.vrma',            // 新しいモーション
+      'relaxed': './assets/animations/relaxed.vrma',    // 新しいモーション
+      'surprised': './assets/animations/surprised.vrma', // 新しいモーション
+      'thinking': './assets/animations/thinking.vrma'   // 新しいモーション
     };
 
     // === VRMロード完了イベントのリスニング ===
