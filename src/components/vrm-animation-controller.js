@@ -65,7 +65,7 @@ AFRAME.registerComponent('vrm-animation-controller', {
     // 注：この実装により、異なる命名規則のVRMAファイルも使用可能
     // 実証済み: Mixamo (mixamorig:*), VRM標準 (J_Bip_C_*), カスタム (l_*/r_*)
     this.emotionToAnimation = {
-      'neutral': './assets/animations/idle_loop.vrma',  // 常時動くアイドルループ
+      'neutral': './assets/animations/neutral.vrma',    // 常時動くダンス寄りのモーション
       'happy': './assets/animations/happy.vrma',        // 新しいモーション
       'angry': './assets/animations/angry.vrma',        // 新しいモーション
       'sad': './assets/animations/sad.vrma',            // 新しいモーション
@@ -248,6 +248,14 @@ AFRAME.registerComponent('vrm-animation-controller', {
     }
 
     console.log(`${this.LOG_PREFIX} 🎭 感情切り替え: ${emotion}`);
+
+    // マーカー検出イベントが揺れても、常時モーションを先頭に戻さない。
+    if (emotion === this.idleEmotion && this.currentAction === action && action.isRunning()) {
+      if (this.vrm) {
+        this.setVRMExpression(emotion);
+      }
+      return;
+    }
 
     // === 現在のアニメーションのフェードアウト ===
     if (this.currentAction && this.currentAction !== action) {
