@@ -65,7 +65,7 @@ AFRAME.registerComponent('vrm-animation-controller', {
     // 注：この実装により、異なる命名規則のVRMAファイルも使用可能
     // 実証済み: Mixamo (mixamorig:*), VRM標準 (J_Bip_C_*), カスタム (l_*/r_*)
     this.emotionToAnimation = {
-      'neutral': './assets/animations/neutral.vrma',    // 新しいモーション
+      'neutral': './assets/animations/idle_loop.vrma',  // 常時動くアイドルループ
       'happy': './assets/animations/happy.vrma',        // 新しいモーション
       'angry': './assets/animations/angry.vrma',        // 新しいモーション
       'sad': './assets/animations/sad.vrma',            // 新しいモーション
