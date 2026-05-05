@@ -3,7 +3,7 @@
  */
 
 import { BottomSheet } from '../components/BottomSheet.js';
-import type { ChatAPIResponse } from '../types/chat.types.js';
+import type { ChatAPIResponse, MessageSendPayload } from '../types/chat.types.js';
 
 export class ChatController {
   private bottomSheet: BottomSheet;
@@ -18,7 +18,7 @@ export class ChatController {
   /**
    * メッセージを送信してAPIから応答を取得
    */
-  private async sendMessage(text: string): Promise<void> {
+  private async sendMessage(payload: MessageSendPayload): Promise<void> {
     try {
       // タイピングインジケーター表示
       this.bottomSheet.showTyping();
@@ -29,7 +29,8 @@ export class ChatController {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: text,
+          message: payload.message,
+          attachments: payload.attachments,
         }),
       });
 

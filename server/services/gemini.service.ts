@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { google } from 'googleapis';
-import type { CalendarEvent, GeminiResponse } from '../types/chat.types.js';
+import type { CalendarEvent, ChatAttachment, GeminiResponse } from '../types/chat.types.js';
 import type { EmotionType } from '../types/emotion.types.js';
 
 // レスポンススキーマの定義
@@ -84,13 +84,78 @@ const CLAUDIA_CHARACTER_INSTRUCTION = `
 - 自分の役割（Cor.Inc.のAIアンバサダー）を意識して会話すること
 `;
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+
+const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+]);
+
+type GeminiContentPart = {
+  text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
+};
 
 interface CalendarExecutionResult {
   success: boolean;
   events?: CalendarEvent[];
   message?: string;
   error?: string;
+}
+
+function buildGenerationConfig(includeStructuredOutput: boolean): Record<string, unknown> {
+  const config: Record<string, unknown> = {
+    responseModalities: ['TEXT'],
+    systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
+    temperature: 0.5,
+    topP: 0.8,
+    topK: 40,
+    maxOutputTokens: 1024,
+  };
+
+  if (includeStructuredOutput) {
+    config.responseMimeType = 'application/json';
+    config.responseSchema = responseSchema;
+  }
+
+  return config;
+}
+
+function normalizeImageAttachments(attachments: ChatAttachment[] = []): ChatAttachment[] {
+  return attachments
+    .filter((attachment) => SUPPORTED_IMAGE_MIME_TYPES.has(attachment.mimeType))
+    .filter((attachment) => attachment.data.length <= 6_000_000)
+    .slice(0, 3);
+}
+
+function buildUserContents(userPrompt: string, attachments: ChatAttachment[] = []): string | GeminiContentPart[] {
+  const imageParts = normalizeImageAttachments(attachments).map((attachment) => ({
+    inlineData: {
+      mimeType: attachment.mimeType,
+      data: attachment.data,
+    },
+  }));
+
+  if (imageParts.length === 0) {
+    return userPrompt;
+  }
+
+  return [
+    ...imageParts,
+    {
+      text: userPrompt || '添付された画像について説明してください。',
+    },
+  ];
+}
+
+function shouldTryFunctionCallingFirst(userPrompt: string): boolean {
+  return /カレンダー|予定|スケジュール|空き|空いて|会議|打ち合わせ/.test(userPrompt);
 }
 
 /**
@@ -193,50 +258,42 @@ async function execute_calendar_events(
 export async function handleFunctionCalling(
   apiKey: string,
   userPrompt: string,
-  oauthToken: string | null
+  oauthToken: string | null,
+  attachments: ChatAttachment[] = []
 ): Promise<GeminiResponse> {
   const ai = new GoogleGenAI({ apiKey });
+  const userContents = buildUserContents(userPrompt, attachments);
+  const tryFunctionCallingFirst = shouldTryFunctionCallingFirst(userPrompt);
 
   // まずStructured Outputで直接応答を試みる（Function Calling不要の場合）
-  const directResponse = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: userPrompt,
-    config: {
-      responseModalities: ['TEXT'],
-      responseMimeType: 'application/json',
-      responseSchema: responseSchema,
-      systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
-      temperature: 0.5,
-      topP: 0.8,
-      topK: 40,
-      maxOutputTokens: 1024,
-    }
-  });
+  if (!tryFunctionCallingFirst) {
+    const directResponse = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: userContents,
+      config: buildGenerationConfig(true)
+    });
 
-  if (directResponse.text) {
-    try {
-      const parsedResponse = JSON.parse(directResponse.text);
-      return {
-        text: parsedResponse.message,
-        emotion: parsedResponse.emotion as EmotionType
-      };
-    } catch (parseError) {
-      // JSON解析失敗 - Function Callingが必要かもしれない
-      console.log('[Info] Structured Outputのみでは不十分、Function Calling試行');
+    if (directResponse.text) {
+      try {
+        const parsedResponse = JSON.parse(directResponse.text);
+        return {
+          text: parsedResponse.message,
+          emotion: parsedResponse.emotion as EmotionType
+        };
+      } catch (parseError) {
+        // JSON解析失敗 - Function Callingが必要かもしれない
+        console.log('[Info] Structured Outputのみでは不十分、Function Calling試行');
+      }
     }
   }
 
   // Function Calling対応（Structured OutputなしのAPIコール）
   const fcResponse = await ai.models.generateContent({
     model: MODEL_NAME,
-    contents: userPrompt,
+    contents: userContents,
     config: {
-      systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
+      ...buildGenerationConfig(false),
       tools: [{ functionDeclarations }],
-      temperature: 0.5,
-      topP: 0.8,
-      topK: 40,
-      maxOutputTokens: 1024,
     }
   });
 
@@ -257,16 +314,7 @@ export async function handleFunctionCalling(
       const formattedResponse = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: `以下のテキストをJSON形式に変換してください: ${text}`,
-        config: {
-          responseModalities: ['TEXT'],
-          responseMimeType: 'application/json',
-          responseSchema: responseSchema,
-          systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
-          temperature: 0.5,
-          topP: 0.8,
-          topK: 40,
-          maxOutputTokens: 1024,
-        }
+        config: buildGenerationConfig(true)
       });
 
       if (formattedResponse.text) {
@@ -321,16 +369,7 @@ export async function handleFunctionCalling(
     const finalResponse = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: `ユーザーの質問: ${userPrompt}\n\nカレンダー情報: ${JSON.stringify(functionResponses[0].response)}\n\n上記の情報に基づいて博多弁で応答してください。`,
-      config: {
-        responseModalities: ['TEXT'],
-        responseMimeType: 'application/json',
-        responseSchema: responseSchema,
-        systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
-        temperature: 0.5,
-        topP: 0.8,
-        topK: 40,
-        maxOutputTokens: 1024,
-      }
+      config: buildGenerationConfig(true)
     });
 
     if (finalResponse.text) {

@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   try {
     console.log('[API] リクエスト受信:', req.method, req.url);
-    console.log('[API] ボディ:', req.body);
+    console.log('[API] 添付数:', Array.isArray(req.body?.attachments) ? req.body.attachments.length : 0);
     
     // 動的インポート（Vercel環境用）
     let handleFunctionCalling;
@@ -43,10 +43,12 @@ export default async function handler(req, res) {
       return;
     }
     
-    const { message, oauthToken } = req.body;
+    const { message, oauthToken, attachments } = req.body;
+    const normalizedMessage = typeof message === 'string' ? message.trim() : '';
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-    if (!message) {
-      res.status(400).json({ error: 'メッセージが必要です' });
+    if (!normalizedMessage && !hasAttachments) {
+      res.status(400).json({ error: 'メッセージまたは画像が必要です' });
       return;
     }
 
@@ -60,12 +62,13 @@ export default async function handler(req, res) {
       return;
     }
 
-    console.log('[API] ユーザーメッセージ:', message);
+    console.log('[API] ユーザーメッセージ:', normalizedMessage || '画像のみ');
 
     const result = await handleFunctionCalling(
       process.env.GEMINI_API_KEY,
-      message,
-      oauthToken || null
+      normalizedMessage,
+      oauthToken || null,
+      attachments || []
     );
 
     console.log('[API] Gemini応答:', result);
@@ -85,4 +88,3 @@ export default async function handler(req, res) {
     });
   }
 }
-

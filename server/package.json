@@ -16,7 +16,7 @@
   "description": "",
   "dependencies": {
     "@ai-sdk/google": "^2.0.17",
-    "@google/genai": "^1.21.0",
+    "@google/genai": "^1.52.0",
     "@mastra/core": "^0.19.1",
     "better-sqlite3": "^12.4.1",
     "body-parser": "^2.2.0",

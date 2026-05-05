@@ -13,6 +13,17 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   emotion?: EmotionType;
+  attachments?: ChatAttachment[];
+}
+
+/**
+ * 画像添付
+ */
+export interface ChatAttachment {
+  mimeType: string;
+  data: string;
+  name?: string;
+  size?: number;
 }
 
 /**
@@ -38,6 +49,15 @@ export interface ChatUIEvent {
 export interface MessageSendEvent {
   message: string;
   oauthToken?: string;
+  attachments?: ChatAttachment[];
+}
+
+/**
+ * メッセージ送信ペイロード
+ */
+export interface MessageSendPayload {
+  message: string;
+  attachments?: ChatAttachment[];
 }
 
 /**
