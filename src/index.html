@@ -42,15 +42,11 @@
       margin: 0; 
       width: 100%;
       height: 100%;
-      min-height: 100dvh;
+      min-height: 100vh;
       overflow: hidden;
       background-color: #000; /* AR表示と同じ黒背景 */
       overscroll-behavior: none;
       touch-action: manipulation;
-    }
-    body {
-      position: fixed;
-      inset: 0;
     }
     #info {
       position: absolute;
@@ -117,12 +113,33 @@
     #orientation-warning button:hover {
       opacity: 0.8;
     }
-    /* A-Frame Stats（パフォーマンス監視） */
-    .a-canvas {
+    /* AR.jsが生成するvideo/canvasをiOS Safari縦画面でも全面に同期 */
+    #ar-scene,
+    .a-canvas,
+    body > video,
+    video {
       position: fixed !important;
       inset: 0 !important;
       width: 100vw !important;
-      height: 100dvh !important;
+      height: 100vh !important;
+      min-width: 100vw !important;
+      min-height: 100vh !important;
+      max-width: none !important;
+      max-height: none !important;
+    }
+    body > video,
+    video {
+      object-fit: cover !important;
+      z-index: -2 !important;
+      transform: none !important;
+    }
+    #ar-scene {
+      display: block !important;
+      overflow: hidden !important;
+      z-index: 0;
+    }
+    /* A-Frame Stats（パフォーマンス監視） */
+    .a-canvas {
       z-index: 0;
     }
     .rs-base {
@@ -148,7 +165,7 @@
 
   <a-scene
     embedded
-    arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; imageSmoothingEnabled: true; debugUIEnabled: false;"
+    arjs="sourceType: webcam; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; imageSmoothingEnabled: true; debugUIEnabled: false;"
     vr-mode-ui="enabled: false"
     id="ar-scene"
   >
@@ -162,10 +179,10 @@
       emitevents="true"
       size="1"
       smooth="true"
-      smoothCount="8"
-      smoothTolerance="0.015"
-      smoothThreshold="3"
-      minConfidence="0.45"
+      smoothCount="5"
+      smoothTolerance="0.02"
+      smoothThreshold="2"
+      minConfidence="0.35"
     >
       <!-- ライト（モバイルGPU負荷低減のため最小限に） -->
       <a-light type="ambient" intensity="1.0"></a-light>
@@ -203,6 +220,39 @@
     // エラーログは常に出力
     const errorLog = (...args) => console.error(...args);
 
+    function syncARViewport() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const elements = [
+        document.querySelector('#ar-scene'),
+        document.querySelector('.a-canvas'),
+        ...document.querySelectorAll('body > video, video')
+      ].filter(Boolean);
+
+      elements.forEach((element) => {
+        element.style.position = 'fixed';
+        element.style.top = '0';
+        element.style.left = '0';
+        element.style.width = `${width}px`;
+        element.style.height = `${height}px`;
+        element.style.minWidth = `${width}px`;
+        element.style.minHeight = `${height}px`;
+      });
+
+      document.querySelectorAll('body > video, video').forEach((video) => {
+        video.style.objectFit = 'cover';
+        video.style.transform = 'none';
+      });
+
+      if (scene && scene.resize) {
+        scene.resize();
+      }
+    }
+
+    window.addEventListener('resize', syncARViewport);
+    window.visualViewport?.addEventListener('resize', syncARViewport);
+    window.visualViewport?.addEventListener('scroll', syncARViewport);
+
     // デバッグモード通知とStats有効化
     if (DEBUG_MODE) {
       document.getElementById('debug-mode-indicator').style.display = 'block';
@@ -236,8 +286,13 @@
             lostCount = 0;  // 縦向きに戻ったらカウンターリセット
             debugLog('[Orientation] 縦向きに戻りました - Lostカウンターリセット');
           }
+          window.setTimeout(syncARViewport, 250);
         });
       }
+
+      syncARViewport();
+      window.setTimeout(syncARViewport, 500);
+      window.setTimeout(syncARViewport, 1500);
 
       // マーカー検出イベント（連続Lost検出追加 + 詳細ログ）
       marker.addEventListener('markerFound', (event) => {
@@ -245,9 +300,9 @@
         
         // minConfidenceを初期値に戻す（検出成功時）
         const currentConfidence = marker.getAttribute('minConfidence');
-        if (currentConfidence < 0.45) {
-          marker.setAttribute('minConfidence', 0.45);
-          debugLog('[Marker] 感度リセット: minConfidence → 0.45');
+        if (currentConfidence < 0.35) {
+          marker.setAttribute('minConfidence', 0.35);
+          debugLog('[Marker] 感度リセット: minConfidence → 0.35');
         }
         
         lostCount = 0;  // 検出成功でリセット
@@ -291,15 +346,15 @@
         // 動的minConfidence調整（連続Lost時に感度を上げる）
         if (lostCount === 3) {
           const currentConfidence = marker.getAttribute('minConfidence');
-          if (currentConfidence >= 0.45) {
-            marker.setAttribute('minConfidence', 0.4);
-            debugLog('[Marker] 感度向上: minConfidence 0.45 → 0.4');
+          if (currentConfidence >= 0.35) {
+            marker.setAttribute('minConfidence', 0.3);
+            debugLog('[Marker] 感度向上: minConfidence 0.35 → 0.3');
           }
         } else if (lostCount === 7) {
           const currentConfidence = marker.getAttribute('minConfidence');
-          if (currentConfidence >= 0.4) {
-            marker.setAttribute('minConfidence', 0.35);
-            debugLog('[Marker] 感度さらに向上: minConfidence 0.4 → 0.35');
+          if (currentConfidence >= 0.3) {
+            marker.setAttribute('minConfidence', 0.25);
+            debugLog('[Marker] 感度さらに向上: minConfidence 0.3 → 0.25');
           }
         }
 
