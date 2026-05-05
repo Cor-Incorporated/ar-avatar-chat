@@ -11,22 +11,25 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '8mb' }));
 
 app.post('/api/chat', async (req: Request<{}, ChatResponse, ChatRequest>, res: Response<ChatResponse | { error: string; message?: string; emotion?: string }>) => {
   try {
-    const { message, oauthToken } = req.body;
+    const { message, oauthToken, attachments } = req.body;
+    const normalizedMessage = message?.trim() || '';
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-    if (!message) {
-      return res.status(400).json({ error: 'メッセージが必要です' });
+    if (!normalizedMessage && !hasAttachments) {
+      return res.status(400).json({ error: 'メッセージまたは画像が必要です' });
     }
 
-    console.log('[API] ユーザーメッセージ:', message);
+    console.log('[API] ユーザーメッセージ:', normalizedMessage || '画像のみ');
 
     const result = await handleFunctionCalling(
       process.env.GEMINI_API_KEY!,
-      message,
-      oauthToken || null
+      normalizedMessage,
+      oauthToken || null,
+      attachments || []
     );
 
     console.log('[API] Gemini応答:', result);
