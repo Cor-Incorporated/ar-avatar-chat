@@ -44,6 +44,7 @@ AFRAME.registerComponent('vrm-loader', {
 
     } catch (error) {
       console.error('VRMロードエラー:', error);
+      this.el.emit('vrm-load-error', { error });
       document.querySelector('#status').textContent = 'VRMロード失敗: ' + error.message;
     }
   },

@@ -180,8 +180,9 @@
         id="avatar"
         vrm-loader="src: ./assets/models/avatar.vrm"
         vrm-animation-controller
-        position="0 0 0"
+        position="0.55 0 -0.2"
         rotation="0 0 0"
+        scale="0.65 0.65 0.65"
       ></a-entity>
     </a-marker>
   </a-scene>
@@ -322,10 +323,42 @@
       const marker = document.querySelector('#marker');
       const info = document.querySelector('#info');
       const avatarEl = document.querySelector('#avatar');
+      let avatarReady = false;
+      let markerVisible = false;
       let vrmLoaded = false;
       let lostCount = 0;  // 連続Lost検出カウンター
       const maxLostThreshold = 5;  // 5回連続で横向き提案
       let orientationWarningShown = false;  // 警告表示済みフラグ
+
+      function markAvatarReady() {
+        avatarReady = true;
+        debugLog('[Avatar] VRMロード完了');
+
+        if (markerVisible) {
+          statusEl.textContent = '✅ マーカー検出！';
+          info.classList.add('hidden');
+          if (window.playEmotion) {
+            window.playEmotion('neutral');
+          }
+        }
+      }
+
+      function updateMarkerFoundUI() {
+        if (avatarReady) {
+          statusEl.textContent = '✅ マーカー検出！';
+          info.classList.add('hidden');
+        } else {
+          statusEl.textContent = '⏳ アバター読み込み中...';
+          info.classList.remove('hidden');
+        }
+      }
+
+      if (avatarEl) {
+        avatarEl.addEventListener('vrm-loaded', markAvatarReady);
+        if (avatarEl.components?.['vrm-loader']?.vrm) {
+          markAvatarReady();
+        }
+      }
 
       // モバイル最適化: フルスクリーン要求（向きロックは削除）
       if (isMobile) {
@@ -355,10 +388,10 @@
           debugLog('[Marker] 感度リセット: minConfidence → 0.35');
         }
         
+        markerVisible = true;
         lostCount = 0;  // 検出成功でリセット
         orientationWarningShown = false;  // 次回のために警告フラグリセット
-        statusEl.textContent = '✅ マーカー検出！';
-        info.classList.add('hidden');
+        updateMarkerFoundUI();
 
         // マーカーの詳細情報をログ出力（デバッグ用）
         if (DEBUG_MODE && marker.object3D) {
@@ -386,12 +419,13 @@
           vrmLoaded = true;
         }
 
-        if (window.playEmotion) {
+        if (avatarReady && window.playEmotion) {
           window.playEmotion('neutral');
         }
       });
 
       marker.addEventListener('markerLost', () => {
+        markerVisible = false;
         lostCount++;
         debugLog(`[Marker] 検出ロスト (${lostCount}/${maxLostThreshold})`);
         statusEl.textContent = '⏳ マーカーが見えません';
