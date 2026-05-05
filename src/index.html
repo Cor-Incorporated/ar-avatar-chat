@@ -2,14 +2,14 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Cor.Inc AR Demo</title>
 
   <!-- A-Frame 1.7.0 -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
 
   <!-- AR.js (パターンマーカー用) -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
 
   <!-- Three.js + three-vrm + three-vrm-animation (Import Map) -->
   <!-- Phase 7: 公式パッケージへ移行 (three v0.177.0, three-vrm v3.4.2) -->
@@ -37,10 +37,20 @@
   <link rel="stylesheet" href="/src/styles/bottom-sheet.css">
 
   <style>
+    html,
     body { 
       margin: 0; 
+      width: 100%;
+      height: 100%;
+      min-height: 100dvh;
       overflow: hidden;
       background-color: #000; /* AR表示と同じ黒背景 */
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
+    body {
+      position: fixed;
+      inset: 0;
     }
     #info {
       position: absolute;
@@ -109,6 +119,10 @@
     }
     /* A-Frame Stats（パフォーマンス監視） */
     .a-canvas {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100dvh !important;
       z-index: 0;
     }
     .rs-base {
@@ -134,7 +148,7 @@
 
   <a-scene
     embedded
-    arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
+    arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; imageSmoothingEnabled: true; debugUIEnabled: false;"
     vr-mode-ui="enabled: false"
     id="ar-scene"
   >
@@ -145,12 +159,13 @@
       type="pattern" 
       url="./assets/markers/penguin-marker.patt" 
       id="marker"
+      emitevents="true"
       size="1"
       smooth="true"
-      smoothCount="5"
-      smoothTolerance="0.02"
-      smoothThreshold="2"
-      minConfidence="0.5"
+      smoothCount="8"
+      smoothTolerance="0.015"
+      smoothThreshold="3"
+      minConfidence="0.45"
     >
       <!-- ライト（モバイルGPU負荷低減のため最小限に） -->
       <a-light type="ambient" intensity="1.0"></a-light>
@@ -213,43 +228,6 @@
         debugLog('[Mobile] 画面サイズ:', window.innerWidth, 'x', window.innerHeight);
         debugLog('[Mobile] デバイスピクセル比:', window.devicePixelRatio);
         
-        // カメラ解像度の確認とフォールバック警告
-        navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            width: { ideal: 1280, min: 640 }, 
-            height: { ideal: 960, min: 480 } 
-          } 
-        })
-          .then((stream) => {
-            const track = stream.getVideoTracks()[0];
-            const settings = track.getSettings();
-            debugLog('[Camera] 実際の解像度:', settings.width, 'x', settings.height);
-            debugLog('[Camera] フレームレート:', settings.frameRate);
-            
-            // 解像度フォールバック警告（ユーザーに重要な情報はUI表示）
-            if (settings.width < 1280 || settings.height < 960) {
-              debugWarn('[Camera] ⚠️ 高解像度が利用不可、フォールバック動作中');
-              debugWarn('[Camera] 検出距離が短くなる可能性があります');
-              // ユーザー向けは簡潔に
-              document.querySelector('#status').textContent = '⚠️ 解像度制限';
-            }
-            
-            track.stop();
-          })
-          .catch((err) => {
-            errorLog('[Camera] カメラアクセス失敗:', err);
-            document.querySelector('#status').textContent = '❌ カメラエラー';
-          });
-        
-        // フルスクリーン要求（タップ時）
-        document.addEventListener('click', () => {
-          if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch((err) => {
-              debugLog('[Mobile] フルスクリーン要求失敗:', err);
-            });
-          }
-        }, { once: true });
-
         // 向き変更イベント監視（縦向きデフォルト、強制なし）
         window.addEventListener('orientationchange', () => {
           const isLandscape = screen.orientation && screen.orientation.type.includes('landscape');
@@ -267,9 +245,9 @@
         
         // minConfidenceを初期値に戻す（検出成功時）
         const currentConfidence = marker.getAttribute('minConfidence');
-        if (currentConfidence < 0.5) {
-          marker.setAttribute('minConfidence', 0.5);
-          debugLog('[Marker] 感度リセット: minConfidence → 0.5');
+        if (currentConfidence < 0.45) {
+          marker.setAttribute('minConfidence', 0.45);
+          debugLog('[Marker] 感度リセット: minConfidence → 0.45');
         }
         
         lostCount = 0;  // 検出成功でリセット
@@ -313,15 +291,15 @@
         // 動的minConfidence調整（連続Lost時に感度を上げる）
         if (lostCount === 3) {
           const currentConfidence = marker.getAttribute('minConfidence');
-          if (currentConfidence >= 0.5) {
-            marker.setAttribute('minConfidence', 0.45);
-            debugLog('[Marker] 感度向上: minConfidence 0.5 → 0.45');
+          if (currentConfidence >= 0.45) {
+            marker.setAttribute('minConfidence', 0.4);
+            debugLog('[Marker] 感度向上: minConfidence 0.45 → 0.4');
           }
         } else if (lostCount === 7) {
           const currentConfidence = marker.getAttribute('minConfidence');
-          if (currentConfidence >= 0.45) {
-            marker.setAttribute('minConfidence', 0.4);
-            debugLog('[Marker] 感度さらに向上: minConfidence 0.45 → 0.4');
+          if (currentConfidence >= 0.4) {
+            marker.setAttribute('minConfidence', 0.35);
+            debugLog('[Marker] 感度さらに向上: minConfidence 0.4 → 0.35');
           }
         }
 

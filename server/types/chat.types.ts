@@ -13,15 +13,27 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   emotion?: EmotionType;
+  attachments?: ChatAttachment[];
+}
+
+/**
+ * 画像添付
+ */
+export interface ChatAttachment {
+  mimeType: string;
+  data: string;
+  name?: string;
+  size?: number;
 }
 
 /**
  * チャットリクエスト
  */
 export interface ChatRequest {
-  message: string;
+  message?: string;
   oauthToken?: string;
   conversationHistory?: ChatMessage[];
+  attachments?: ChatAttachment[];
 }
 
 /**

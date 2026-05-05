@@ -3,20 +3,30 @@
  * AR表示領域を最大化しながら、直感的なチャット操作を提供
  */
 
-import type { BottomSheetState, BottomSheetConfig, ChatMessage } from '../types/chat.types.js';
+import type {
+  BottomSheetState,
+  BottomSheetConfig,
+  ChatAttachment,
+  ChatMessage,
+  MessageSendPayload,
+} from '../types/chat.types.js';
 
 export class BottomSheet {
   private container: HTMLElement | null = null;
   private messagesContainer: HTMLElement | null = null;
   private inputContainer: HTMLElement | null = null;
+  private attachmentPreview: HTMLElement | null = null;
   private dragHandle: HTMLElement | null = null;
   private inputElement: HTMLInputElement | null = null;
+  private fileInputElement: HTMLInputElement | null = null;
+  private attachButton: HTMLButtonElement | null = null;
   private sendButton: HTMLButtonElement | null = null;
 
   private state: BottomSheetState = 'collapsed';
   private startY: number = 0;
   private currentY: number = 0;
   private messages: ChatMessage[] = [];
+  private pendingAttachment: ChatAttachment | null = null;
 
   private config: BottomSheetConfig = {
     collapsedHeight: 120,
@@ -26,11 +36,12 @@ export class BottomSheet {
     animationDuration: 300,
   };
 
-  private onSendMessage: ((message: string) => void) | null = null;
+  private onSendMessage: ((payload: MessageSendPayload) => void) | null = null;
 
   constructor() {
     this.createBottomSheet();
     this.attachEventListeners();
+    this.syncViewportMetrics();
   }
 
   /**
@@ -43,7 +54,16 @@ export class BottomSheet {
         <div class="messages-preview" id="messages-preview">
           <!-- メッセージがここに表示されます -->
         </div>
+        <div class="attachment-preview" id="attachment-preview" aria-live="polite"></div>
         <div class="input-container" id="input-container">
+          <input
+            type="file"
+            id="bottom-sheet-file"
+            class="bottom-sheet-file"
+            accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
+            aria-label="画像を添付"
+          />
+          <button id="bottom-sheet-attach" class="bottom-sheet-attach" title="画像を添付" aria-label="画像を添付">+</button>
           <input
             type="text"
             id="bottom-sheet-input"
@@ -60,8 +80,11 @@ export class BottomSheet {
     this.container = document.getElementById('bottom-sheet');
     this.dragHandle = document.getElementById('drag-handle');
     this.messagesContainer = document.getElementById('messages-preview');
+    this.attachmentPreview = document.getElementById('attachment-preview');
     this.inputContainer = document.getElementById('input-container');
     this.inputElement = document.getElementById('bottom-sheet-input') as HTMLInputElement;
+    this.fileInputElement = document.getElementById('bottom-sheet-file') as HTMLInputElement;
+    this.attachButton = document.getElementById('bottom-sheet-attach') as HTMLButtonElement;
     this.sendButton = document.getElementById('bottom-sheet-send') as HTMLButtonElement;
 
     // 初期状態を設定
@@ -72,7 +95,7 @@ export class BottomSheet {
    * イベントリスナーを設定
    */
   private attachEventListeners(): void {
-    if (!this.dragHandle || !this.inputElement || !this.sendButton) {
+    if (!this.dragHandle || !this.inputElement || !this.fileInputElement || !this.attachButton || !this.sendButton) {
       console.error('[BottomSheet] Required elements not found');
       return;
     }
@@ -88,6 +111,10 @@ export class BottomSheet {
     // 送信ボタン
     this.sendButton.addEventListener('click', this.handleSend.bind(this));
 
+    // 画像添付
+    this.attachButton.addEventListener('click', () => this.fileInputElement?.click());
+    this.fileInputElement.addEventListener('change', this.handleFileSelection.bind(this));
+
     // Enterキーで送信
     this.inputElement.addEventListener('keypress', (e: KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -95,6 +122,181 @@ export class BottomSheet {
         this.handleSend();
       }
     });
+
+    this.inputElement.addEventListener('focus', () => {
+      if (this.state === 'collapsed' && this.messages.length > 0) {
+        this.peek();
+      }
+      this.syncViewportMetrics();
+    });
+
+    this.inputElement.addEventListener('blur', () => {
+      window.setTimeout(() => this.syncViewportMetrics(), 120);
+    });
+
+    window.visualViewport?.addEventListener('resize', this.syncViewportMetrics);
+    window.visualViewport?.addEventListener('scroll', this.syncViewportMetrics);
+    window.addEventListener('resize', this.syncViewportMetrics);
+  }
+
+  /**
+   * iOS Safariのキーボード表示時にAR画面をリサイズせず、入力欄だけを追従させる
+   */
+  private syncViewportMetrics = (): void => {
+    if (!this.container) return;
+
+    const viewport = window.visualViewport;
+    const keyboardOffset = viewport
+      ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      : 0;
+
+    this.container.style.setProperty('--keyboard-offset', `${keyboardOffset}px`);
+
+    if (this.inputContainer) {
+      const inputHeight = this.inputContainer.getBoundingClientRect().height;
+      this.container.style.setProperty('--chat-input-height', `${Math.ceil(inputHeight)}px`);
+    }
+  };
+
+  /**
+   * 状態ごとのCSSクラスを更新
+   */
+  private updateStateClass(): void {
+    if (!this.container) return;
+
+    this.container.classList.remove('state-collapsed', 'state-peek', 'state-expanded');
+    this.container.classList.add(`state-${this.state}`);
+  }
+
+  /**
+   * 添付画像を端末側で圧縮し、APIへ送れるBase64に変換する
+   */
+  private async handleFileSelection(): Promise<void> {
+    const file = this.fileInputElement?.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      this.showAttachmentError('画像ファイルを選択してください。');
+      this.clearFileInput();
+      return;
+    }
+
+    try {
+      this.pendingAttachment = await this.optimizeImage(file);
+      this.renderAttachmentPreview(file.name);
+    } catch (error) {
+      console.error('[BottomSheet] 画像の処理に失敗:', error);
+      this.showAttachmentError('画像の読み込みに失敗しました。');
+      this.pendingAttachment = null;
+    } finally {
+      this.clearFileInput();
+      this.syncViewportMetrics();
+    }
+  }
+
+  /**
+   * モバイル回線とVercel payload制限を考慮して画像を縮小する
+   */
+  private async optimizeImage(file: File): Promise<ChatAttachment> {
+    const dataUrl = await this.readFileAsDataURL(file);
+    let optimizedDataUrl: string;
+
+    try {
+      optimizedDataUrl = await this.resizeImage(dataUrl, 1280, 0.82);
+    } catch (error) {
+      // HEICなどCanvasでデコードできない形式は、小さい場合だけ元データを送る
+      if (file.size > 4_000_000) {
+        throw error;
+      }
+      optimizedDataUrl = dataUrl;
+    }
+
+    const [header, data] = optimizedDataUrl.split(',');
+    const mimeType = header.match(/^data:(.*);base64$/)?.[1] || 'image/jpeg';
+
+    return {
+      mimeType,
+      data,
+      name: file.name,
+      size: Math.ceil((data.length * 3) / 4),
+    };
+  }
+
+  private readFileAsDataURL(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private resizeImage(dataUrl: string, maxSize: number, quality: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+          reject(new Error('Canvas context is not available'));
+          return;
+        }
+
+        context.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Image decode failed'));
+      img.src = dataUrl;
+    });
+  }
+
+  private renderAttachmentPreview(fileName: string): void {
+    if (!this.attachmentPreview || !this.pendingAttachment) return;
+
+    this.attachmentPreview.innerHTML = `
+      <div class="attachment-pill">
+        <span class="attachment-name">${this.escapeHtml(fileName)}</span>
+        <button class="attachment-remove" type="button" aria-label="添付画像を削除">x</button>
+      </div>
+    `;
+    this.attachmentPreview.style.display = 'block';
+    this.attachmentPreview
+      .querySelector('.attachment-remove')
+      ?.addEventListener('click', () => this.clearAttachment());
+  }
+
+  private showAttachmentError(message: string): void {
+    if (!this.attachmentPreview) return;
+
+    this.attachmentPreview.innerHTML = `<div class="attachment-error">${this.escapeHtml(message)}</div>`;
+    this.attachmentPreview.style.display = 'block';
+    window.setTimeout(() => {
+      if (!this.pendingAttachment && this.attachmentPreview) {
+        this.attachmentPreview.style.display = 'none';
+        this.attachmentPreview.innerHTML = '';
+      }
+    }, 3000);
+  }
+
+  private clearAttachment(): void {
+    this.pendingAttachment = null;
+    if (this.attachmentPreview) {
+      this.attachmentPreview.style.display = 'none';
+      this.attachmentPreview.innerHTML = '';
+    }
+    this.syncViewportMetrics();
+  }
+
+  private clearFileInput(): void {
+    if (this.fileInputElement) {
+      this.fileInputElement.value = '';
+    }
   }
 
   /**
@@ -115,13 +317,13 @@ export class BottomSheet {
     this.currentY = e.touches[0].clientY;
     const deltaY = this.startY - this.currentY;
 
-    const currentHeight = this.container.offsetHeight;
+    const currentHeight = Number(this.container.dataset.sheetHeight || this.config.collapsedHeight);
     const newHeight = Math.max(
       this.config.collapsedHeight,
       Math.min(this.config.expandedHeight, currentHeight + deltaY)
     );
 
-    this.container.style.height = `${newHeight}px`;
+    this.container.dataset.sheetHeight = `${newHeight}`;
     this.startY = this.currentY;
   }
 
@@ -131,7 +333,7 @@ export class BottomSheet {
   private onDragEnd(): void {
     if (!this.container) return;
 
-    const currentHeight = this.container.offsetHeight;
+    const currentHeight = Number(this.container.dataset.sheetHeight || this.config.collapsedHeight);
 
     // スナップポイントを決定
     if (currentHeight < this.config.peekHeight - this.config.dragThreshold) {
@@ -141,6 +343,7 @@ export class BottomSheet {
     } else {
       this.expand();
     }
+    delete this.container.dataset.sheetHeight;
   }
 
   /**
@@ -156,13 +359,13 @@ export class BottomSheet {
       this.currentY = moveEvent.clientY;
       const deltaY = this.startY - this.currentY;
 
-      const currentHeight = this.container.offsetHeight;
+      const currentHeight = Number(this.container.dataset.sheetHeight || this.config.collapsedHeight);
       const newHeight = Math.max(
         this.config.collapsedHeight,
         Math.min(this.config.expandedHeight, currentHeight + deltaY)
       );
 
-      this.container.style.height = `${newHeight}px`;
+      this.container.dataset.sheetHeight = `${newHeight}`;
       this.startY = this.currentY;
     };
 
@@ -170,6 +373,7 @@ export class BottomSheet {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
       this.onDragEnd();
+      if (this.container) delete this.container.dataset.sheetHeight;
     };
 
     document.addEventListener('mousemove', onMouseMove);
@@ -183,8 +387,9 @@ export class BottomSheet {
     if (!this.container || !this.messagesContainer) return;
 
     this.state = 'collapsed';
-    this.container.style.height = `${this.config.collapsedHeight}px`;
+    this.updateStateClass();
     this.messagesContainer.style.display = 'none';
+    this.syncViewportMetrics();
   }
 
   /**
@@ -194,9 +399,10 @@ export class BottomSheet {
     if (!this.container || !this.messagesContainer) return;
 
     this.state = 'peek';
-    this.container.style.height = `${this.config.peekHeight}px`;
+    this.updateStateClass();
     this.messagesContainer.style.display = 'flex';
     this.displayRecentMessages(2);
+    this.syncViewportMetrics();
   }
 
   /**
@@ -206,9 +412,10 @@ export class BottomSheet {
     if (!this.container || !this.messagesContainer) return;
 
     this.state = 'expanded';
-    this.container.style.height = `${this.config.expandedHeight}px`;
+    this.updateStateClass();
     this.messagesContainer.style.display = 'flex';
     this.displayRecentMessages(10);
+    this.syncViewportMetrics();
   }
 
   /**
@@ -256,16 +463,18 @@ export class BottomSheet {
   private handleSend(): void {
     if (!this.inputElement) return;
 
-    const text = this.inputElement.value.trim();
+    const attachments = this.pendingAttachment ? [this.pendingAttachment] : undefined;
+    const text = this.inputElement.value.trim() || (attachments ? 'この画像について説明して' : '');
     if (!text) return;
 
     // ユーザーメッセージを追加
-    this.addMessage('user', text);
+    this.addMessage('user', attachments ? `${text}（画像付き）` : text);
     this.inputElement.value = '';
+    this.clearAttachment();
 
     // コールバックを実行
     if (this.onSendMessage) {
-      this.onSendMessage(text);
+      this.onSendMessage({ message: text, attachments });
     }
   }
 
@@ -313,6 +522,10 @@ export class BottomSheet {
 
     this.messagesContainer.insertAdjacentHTML('beforeend', typingHTML);
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+
+    if (this.state === 'collapsed') {
+      this.peek();
+    }
   }
 
   /**
@@ -328,7 +541,7 @@ export class BottomSheet {
   /**
    * メッセージ送信コールバックを設定
    */
-  public setSendCallback(callback: (message: string) => void): void {
+  public setSendCallback(callback: (payload: MessageSendPayload) => void): void {
     this.onSendMessage = callback;
   }
 
