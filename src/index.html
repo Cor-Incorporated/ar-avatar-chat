@@ -113,37 +113,9 @@
     #orientation-warning button:hover {
       opacity: 0.8;
     }
-    /* AR.jsが生成するvideo/canvasをiOS Safari縦画面でも全面に同期 */
-    #ar-scene,
-    .a-canvas,
-    body > video,
-    video {
-      position: fixed !important;
-      inset: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      min-width: 100vw !important;
-      min-height: 100vh !important;
-      max-width: none !important;
-      max-height: none !important;
-    }
-    body > video,
-    video {
-      object-fit: cover !important;
-      z-index: 0 !important;
-      transform: none !important;
-      background: transparent !important;
-    }
-    #ar-scene {
-      display: block !important;
-      overflow: hidden !important;
-      background: transparent !important;
-      z-index: 1;
-    }
     /* A-Frame Stats（パフォーマンス監視） */
     .a-canvas {
-      background: transparent !important;
-      z-index: 1;
+      z-index: 0;
     }
     .rs-base {
       position: fixed !important;
@@ -168,8 +140,7 @@
 
   <a-scene
     embedded
-    arjs="sourceType: webcam; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; imageSmoothingEnabled: true; debugUIEnabled: false;"
-    renderer="alpha: true; antialias: true; precision: mediump;"
+    arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; imageSmoothingEnabled: true; debugUIEnabled: false;"
     vr-mode-ui="enabled: false"
     id="ar-scene"
   >
@@ -224,53 +195,6 @@
     // エラーログは常に出力
     const errorLog = (...args) => console.error(...args);
 
-    function syncARViewport() {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const elements = [
-        document.querySelector('#ar-scene'),
-        document.querySelector('.a-canvas'),
-        ...document.querySelectorAll('body > video, video')
-      ].filter(Boolean);
-
-      elements.forEach((element) => {
-        element.style.position = 'fixed';
-        element.style.top = '0';
-        element.style.left = '0';
-        element.style.width = `${width}px`;
-        element.style.height = `${height}px`;
-        element.style.minWidth = `${width}px`;
-        element.style.minHeight = `${height}px`;
-      });
-
-      document.querySelectorAll('body > video, video').forEach((video) => {
-        video.style.objectFit = 'cover';
-        video.style.transform = 'none';
-        video.style.zIndex = '0';
-        video.style.background = 'transparent';
-      });
-
-      const arScene = document.querySelector('#ar-scene');
-      if (arScene) {
-        arScene.style.zIndex = '1';
-        arScene.style.background = 'transparent';
-      }
-
-      const canvas = document.querySelector('.a-canvas');
-      if (canvas) {
-        canvas.style.zIndex = '1';
-        canvas.style.background = 'transparent';
-      }
-
-      if (scene && scene.resize) {
-        scene.resize();
-      }
-    }
-
-    window.addEventListener('resize', syncARViewport);
-    window.visualViewport?.addEventListener('resize', syncARViewport);
-    window.visualViewport?.addEventListener('scroll', syncARViewport);
-
     // デバッグモード通知とStats有効化
     if (DEBUG_MODE) {
       document.getElementById('debug-mode-indicator').style.display = 'block';
@@ -304,13 +228,8 @@
             lostCount = 0;  // 縦向きに戻ったらカウンターリセット
             debugLog('[Orientation] 縦向きに戻りました - Lostカウンターリセット');
           }
-          window.setTimeout(syncARViewport, 250);
         });
       }
-
-      syncARViewport();
-      window.setTimeout(syncARViewport, 500);
-      window.setTimeout(syncARViewport, 1500);
 
       // マーカー検出イベント（連続Lost検出追加 + 詳細ログ）
       marker.addEventListener('markerFound', (event) => {
@@ -352,6 +271,10 @@
         if (isMobile && !vrmLoaded && avatarEl) {
           debugLog('[Mobile] VRM遅延ロード開始');
           vrmLoaded = true;
+        }
+
+        if (window.playEmotion) {
+          window.playEmotion('neutral');
         }
       });
 
