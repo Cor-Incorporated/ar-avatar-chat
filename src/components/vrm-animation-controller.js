@@ -251,6 +251,12 @@ AFRAME.registerComponent('vrm-animation-controller', {
 
     // マーカー検出イベントが揺れても、常時モーションを先頭に戻さない。
     if (emotion === this.idleEmotion && this.currentAction === action && action.isRunning()) {
+      if (this.mixer) {
+        this.mixer.timeScale = 1;
+      }
+      action.enabled = true;
+      action.paused = false;
+      action.timeScale = 1;
       if (this.vrm) {
         this.setVRMExpression(emotion);
       }
@@ -263,6 +269,12 @@ AFRAME.registerComponent('vrm-animation-controller', {
     }
 
     // === 新しいアニメーションのフェードイン ===
+    if (this.mixer) {
+      this.mixer.timeScale = 1;
+    }
+    action.enabled = true;
+    action.paused = false;
+    action.timeScale = 1;
     action.reset().fadeIn(this.FADE_DURATION).play();
     this.currentAction = action;
 

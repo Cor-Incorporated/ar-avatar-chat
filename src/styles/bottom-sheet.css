@@ -3,6 +3,22 @@
  * AR表示領域を最大化しながら、快適なチャット操作を提供
  */
 
+html.keyboard-overlay-active,
+body.keyboard-overlay-active {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: manipulation;
+}
+
+body.keyboard-overlay-active {
+  position: fixed !important;
+  top: calc(-1 * var(--locked-scroll-y, 0px)) !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: var(--ar-layout-height, 100vh) !important;
+}
+
 .bottom-sheet {
   position: fixed;
   inset: 0;
@@ -235,7 +251,7 @@
 /* 入力コンテナ */
 .input-container {
   position: fixed; /* fixedで配置してキーボードの影響を最小化 */
-  bottom: var(--keyboard-offset);
+  bottom: 0;
   left: 0;
   right: 0;
   margin: 0;
@@ -251,6 +267,8 @@
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
   z-index: 10000; /* 最前面に配置 */
   pointer-events: auto; /* クリック可能 */
+  transform: translate3d(0, calc(-1 * var(--keyboard-offset)), 0);
+  will-change: transform;
 }
 
 .bottom-sheet-file {
