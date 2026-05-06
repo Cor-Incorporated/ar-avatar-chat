@@ -54,6 +54,7 @@ AFRAME.registerComponent('vrm-animation-controller', {
     this.mixer = null;              // Three.js AnimationMixer
     this.actions = {};              // 感情別のAnimationActionマップ
     this.currentAction = null;      // 現在再生中のアクション
+    this.currentEmotion = null;     // 現在再生中の感情
     this.vrm = null;               // VRMインスタンス（外部から注入）
     this.vrmAnimations = {};       // ロード済みVRMAnimationマップ
     
@@ -84,6 +85,7 @@ AFRAME.registerComponent('vrm-animation-controller', {
     // === グローバルAPIの提供 ===
     // 外部（ChatControllerなど）からアニメーションを制御可能に
     window.playEmotion = (emotion) => this.playEmotion(emotion);
+    window.ensureIdleEmotion = () => this.ensureIdleEmotion();
   },
 
   /**
@@ -238,7 +240,35 @@ AFRAME.registerComponent('vrm-animation-controller', {
    * フェードイン/フェードアウトにより滑らかな遷移を実現。
    * メモリリーク防止のため、イベントリスナーを適切にクリーンアップ。
    */
+  normalizeEmotion(emotion) {
+    if (!emotion || typeof emotion !== 'string') {
+      return this.idleEmotion;
+    }
+
+    const normalized = emotion.trim().toLowerCase();
+    return this.emotionToAnimation[normalized] ? normalized : this.idleEmotion;
+  },
+
+  /**
+   * ARマーカー再検出時に、会話モーションをneutralで上書きしないためのidle保証。
+   */
+  ensureIdleEmotion() {
+    if (
+      this.currentEmotion
+      && this.currentEmotion !== this.idleEmotion
+      && this.currentAction
+      && this.currentAction.isRunning()
+    ) {
+      return;
+    }
+
+    if (!this.currentAction || !this.currentAction.isRunning()) {
+      this.playEmotion(this.idleEmotion);
+    }
+  },
+
   playEmotion(emotion) {
+    emotion = this.normalizeEmotion(emotion);
     const action = this.actions[emotion];
 
     if (!action) {
@@ -277,6 +307,7 @@ AFRAME.registerComponent('vrm-animation-controller', {
     action.timeScale = 1;
     action.reset().fadeIn(this.FADE_DURATION).play();
     this.currentAction = action;
+    this.currentEmotion = emotion;
 
     // === neutral以外: 終了後にneutralへ自動復帰 ===
     if (emotion !== this.idleEmotion) {
@@ -314,6 +345,7 @@ AFRAME.registerComponent('vrm-animation-controller', {
         // リスナーの削除（一度だけ実行）
         this.mixer.removeEventListener('finished', this.finishedListener);
         this.finishedListener = null;
+        this.currentEmotion = this.idleEmotion;
         
         // neutralアニメーションの再生
         this.playEmotion(this.idleEmotion);
