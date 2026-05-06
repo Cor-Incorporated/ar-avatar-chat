@@ -211,7 +211,7 @@
         vrm-animation-controller
         position="0 0 0"
         rotation="0 0 0"
-        scale="0.65 0.65 0.65"
+        scale="0.78 0.78 0.78"
       ></a-entity>
     </a-marker>
   </a-scene>
@@ -538,8 +538,8 @@
         if (markerVisible) {
           statusEl.textContent = '✅ マーカー検出！';
           info.classList.add('hidden');
-          if (window.playEmotion) {
-            window.playEmotion('neutral');
+          if (window.ensureIdleEmotion) {
+            window.ensureIdleEmotion();
           }
         }
       }
@@ -621,8 +621,8 @@
           vrmLoaded = true;
         }
 
-        if (avatarReady && window.playEmotion) {
-          window.playEmotion('neutral');
+        if (avatarReady && window.ensureIdleEmotion) {
+          window.ensureIdleEmotion();
         }
       });
 
