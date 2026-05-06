@@ -27,6 +27,11 @@ export class BottomSheet {
   private currentY: number = 0;
   private messages: ChatMessage[] = [];
   private pendingAttachment: ChatAttachment | null = null;
+  private keyboardOverlayActive: boolean = false;
+  private lockedScrollY: number = 0;
+  private stableViewportWidth: number = window.innerWidth;
+  private stableViewportHeight: number = window.innerHeight;
+  private blurReleaseTimer: number | null = null;
 
   private config: BottomSheetConfig = {
     collapsedHeight: 120,
@@ -123,7 +128,11 @@ export class BottomSheet {
       }
     });
 
+    this.inputElement.addEventListener('touchstart', this.activateKeyboardOverlayFromPointer, { passive: true });
+    this.inputElement.addEventListener('mousedown', this.activateKeyboardOverlayFromPointer);
+
     this.inputElement.addEventListener('focus', () => {
+      this.activateKeyboardOverlay();
       if (this.state === 'collapsed' && this.messages.length > 0) {
         this.peek();
       }
@@ -131,7 +140,13 @@ export class BottomSheet {
     });
 
     this.inputElement.addEventListener('blur', () => {
-      window.setTimeout(() => this.syncViewportMetrics(), 120);
+      if (this.blurReleaseTimer) {
+        window.clearTimeout(this.blurReleaseTimer);
+      }
+      this.blurReleaseTimer = window.setTimeout(() => {
+        this.deactivateKeyboardOverlay();
+        this.syncViewportMetrics();
+      }, 180);
     });
 
     window.visualViewport?.addEventListener('resize', this.syncViewportMetrics);
@@ -146,17 +161,100 @@ export class BottomSheet {
     if (!this.container) return;
 
     const viewport = window.visualViewport;
+    const layoutHeight = document.documentElement.clientHeight || window.innerHeight;
     const keyboardOffset = viewport
-      ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      ? Math.max(0, layoutHeight - viewport.height - viewport.offsetTop)
       : 0;
 
     this.container.style.setProperty('--keyboard-offset', `${keyboardOffset}px`);
+    document.documentElement.style.setProperty('--keyboard-offset', `${keyboardOffset}px`);
 
     if (this.inputContainer) {
       const inputHeight = this.inputContainer.getBoundingClientRect().height;
       this.container.style.setProperty('--chat-input-height', `${Math.ceil(inputHeight)}px`);
     }
+
+    if (!this.keyboardOverlayActive && keyboardOffset === 0) {
+      this.captureStableViewport();
+    } else if (this.keyboardOverlayActive) {
+      this.restoreLockedScroll();
+    }
   };
+
+  /**
+   * キーボード表示前のAR表示サイズを保存する。
+   * iOS/Chromeは入力フォーカス後にvisualViewportを縮めるため、その前の値をAR背景の固定基準にする。
+   */
+  private captureStableViewport(): void {
+    const viewport = window.visualViewport;
+    const layoutWidth = document.documentElement.clientWidth || window.innerWidth;
+    const layoutHeight = document.documentElement.clientHeight || window.innerHeight;
+
+    this.stableViewportWidth = Math.round(Math.max(layoutWidth, viewport?.width || 0));
+    this.stableViewportHeight = Math.round(Math.max(layoutHeight, viewport?.height || 0));
+
+    document.documentElement.style.setProperty('--ar-layout-width', `${this.stableViewportWidth}px`);
+    document.documentElement.style.setProperty('--ar-layout-height', `${this.stableViewportHeight}px`);
+  }
+
+  private prepareKeyboardOverlay = (): void => {
+    if (this.blurReleaseTimer) {
+      window.clearTimeout(this.blurReleaseTimer);
+      this.blurReleaseTimer = null;
+    }
+
+    this.lockedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    this.captureStableViewport();
+  };
+
+  private activateKeyboardOverlayFromPointer = (): void => {
+    this.activateKeyboardOverlay();
+    window.setTimeout(() => {
+      if (document.activeElement !== this.inputElement) {
+        this.deactivateKeyboardOverlay();
+      }
+    }, 500);
+  };
+
+  /**
+   * 入力中はチャット欄だけを半透明オーバーレイとして持ち上げ、AR/video/canvasの基準画面は固定する。
+   */
+  private activateKeyboardOverlay(): void {
+    if (this.keyboardOverlayActive) return;
+
+    this.keyboardOverlayActive = true;
+    this.prepareKeyboardOverlay();
+
+    document.documentElement.classList.add('keyboard-overlay-active');
+    document.body.classList.add('keyboard-overlay-active');
+    document.body.style.setProperty('--locked-scroll-y', `${this.lockedScrollY}px`);
+
+    window.dispatchEvent(new CustomEvent('ar-keyboard-overlay-change', { detail: { active: true } }));
+    this.restoreLockedScroll();
+  }
+
+  private deactivateKeyboardOverlay(): void {
+    if (!this.keyboardOverlayActive) return;
+
+    this.keyboardOverlayActive = false;
+    document.documentElement.classList.remove('keyboard-overlay-active');
+    document.body.classList.remove('keyboard-overlay-active');
+    document.body.style.removeProperty('--locked-scroll-y');
+    document.documentElement.style.setProperty('--keyboard-offset', '0px');
+    this.container?.style.setProperty('--keyboard-offset', '0px');
+
+    window.dispatchEvent(new CustomEvent('ar-keyboard-overlay-change', { detail: { active: false } }));
+    window.scrollTo(0, this.lockedScrollY);
+  }
+
+  private restoreLockedScroll(): void {
+    if (!this.keyboardOverlayActive) return;
+
+    window.requestAnimationFrame(() => {
+      if (!this.keyboardOverlayActive) return;
+      window.scrollTo(0, this.lockedScrollY);
+    });
+  }
 
   /**
    * 状態ごとのCSSクラスを更新
