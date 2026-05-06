@@ -116,8 +116,8 @@
     #ar-scene {
       position: fixed !important;
       inset: 0 !important;
-      width: 100vw !important;
-      height: 100dvh !important;
+      width: var(--ar-layout-width, 100vw) !important;
+      height: var(--ar-layout-height, 100vh) !important;
       margin: 0 !important;
       background: transparent !important;
       overflow: hidden !important;
@@ -216,43 +216,83 @@
     const statusEl = document.querySelector('#status');
     let cameraErrorMessage = '';
     let cameraReadyWaitId = 0;
+    let lastStableARVideoRect = null;
+
+    function cloneRect(rect) {
+      return {
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height
+      };
+    }
+
+    function isKeyboardOverlayActive() {
+      return document.documentElement.classList.contains('keyboard-overlay-active')
+        || document.body.classList.contains('keyboard-overlay-active');
+    }
+
+    function applyFixedLayerRect(element, rect) {
+      if (!element || !rect || rect.width <= 0 || rect.height <= 0) return;
+
+      element.style.position = 'fixed';
+      element.style.top = `${rect.top}px`;
+      element.style.left = `${rect.left}px`;
+      element.style.width = `${rect.width}px`;
+      element.style.height = `${rect.height}px`;
+      element.style.maxWidth = 'none';
+      element.style.maxHeight = 'none';
+      element.style.margin = '0';
+      element.style.transform = 'none';
+    }
 
     // AR.jsはvideoを端末比率に合わせて中央クロップするため、canvasを実測video矩形へ同期する。
     // CSS文字列だけのコピーでは親要素オフセットが残り、iOS縦画面でアバターだけ画面外へずれる。
+    // 入力中はvisualViewportが縮むので、最後に正常だったAR矩形を保持して背景を押し上げない。
     function syncARLayers() {
       const video = document.querySelector('#arjs-video');
       const canvas = document.querySelector('.a-canvas');
       const arScene = document.querySelector('#ar-scene');
+      const keyboardActive = isKeyboardOverlayActive();
+      let targetRect = lastStableARVideoRect;
 
       if (video) {
         video.style.zIndex = '0';
         video.style.background = 'transparent';
+        video.style.objectFit = 'cover';
+
+        const videoRect = video.getBoundingClientRect();
+        if (videoRect.width > 0 && videoRect.height > 0 && !keyboardActive) {
+          lastStableARVideoRect = cloneRect(videoRect);
+          targetRect = lastStableARVideoRect;
+        }
+
+        if (keyboardActive && lastStableARVideoRect) {
+          targetRect = lastStableARVideoRect;
+        } else if (videoRect.width > 0 && videoRect.height > 0) {
+          targetRect = cloneRect(videoRect);
+        }
+
+        if (targetRect && keyboardActive) {
+          applyFixedLayerRect(video, targetRect);
+        }
       }
 
       if (canvas) {
         canvas.style.position = 'fixed';
         canvas.style.zIndex = '1';
         canvas.style.background = 'transparent';
-        canvas.style.margin = '0';
-        canvas.style.transform = 'none';
 
-        if (video) {
-          const videoRect = video.getBoundingClientRect();
-
-          if (videoRect.width > 0 && videoRect.height > 0) {
-            canvas.style.top = `${videoRect.top}px`;
-            canvas.style.left = `${videoRect.left}px`;
-            canvas.style.width = `${videoRect.width}px`;
-            canvas.style.height = `${videoRect.height}px`;
-          }
+        if (targetRect) {
+          applyFixedLayerRect(canvas, targetRect);
         }
       }
 
       if (arScene) {
         arScene.style.position = 'fixed';
         arScene.style.inset = '0';
-        arScene.style.width = '100vw';
-        arScene.style.height = '100dvh';
+        arScene.style.width = 'var(--ar-layout-width, 100vw)';
+        arScene.style.height = 'var(--ar-layout-height, 100vh)';
         arScene.style.margin = '0';
         arScene.style.transform = 'none';
         arScene.style.zIndex = '1';
@@ -332,6 +372,11 @@
     window.addEventListener('resize', () => window.setTimeout(syncARLayers, 0));
     window.visualViewport?.addEventListener('resize', () => window.setTimeout(syncARLayers, 0));
     window.visualViewport?.addEventListener('scroll', () => window.setTimeout(syncARLayers, 0));
+    window.addEventListener('ar-keyboard-overlay-change', () => {
+      syncARLayers();
+      window.requestAnimationFrame(syncARLayers);
+      window.setTimeout(syncARLayers, 250);
+    });
 
     // デバッグモード通知とStats有効化
     if (DEBUG_MODE) {
