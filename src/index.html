@@ -114,8 +114,13 @@
       opacity: 0.8;
     }
     #ar-scene {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100dvh !important;
+      margin: 0 !important;
       background: transparent !important;
-      overflow: visible !important;
+      overflow: hidden !important;
       z-index: 1;
     }
     #arjs-video,
@@ -125,6 +130,7 @@
     }
     /* A-Frame Stats（パフォーマンス監視） */
     .a-canvas {
+      position: fixed !important;
       background: transparent !important;
       z-index: 1 !important;
     }
@@ -211,8 +217,8 @@
     let cameraErrorMessage = '';
     let cameraReadyWaitId = 0;
 
-    // AR.jsはvideoだけを中央クロップするため、canvasにも同じCSS寸法を同期する。
-    // これでカメラ映像、マーカー座標、VRM描画の画面上の基準を一致させる。
+    // AR.jsはvideoを端末比率に合わせて中央クロップするため、canvasを実測video矩形へ同期する。
+    // CSS文字列だけのコピーでは親要素オフセットが残り、iOS縦画面でアバターだけ画面外へずれる。
     function syncARLayers() {
       const video = document.querySelector('#arjs-video');
       const canvas = document.querySelector('.a-canvas');
@@ -224,22 +230,34 @@
       }
 
       if (canvas) {
+        canvas.style.position = 'fixed';
         canvas.style.zIndex = '1';
         canvas.style.background = 'transparent';
+        canvas.style.margin = '0';
+        canvas.style.transform = 'none';
 
         if (video) {
-          ['position', 'top', 'left', 'width', 'height', 'marginLeft', 'marginTop'].forEach((property) => {
-            if (video.style[property]) {
-              canvas.style[property] = video.style[property];
-            }
-          });
+          const videoRect = video.getBoundingClientRect();
+
+          if (videoRect.width > 0 && videoRect.height > 0) {
+            canvas.style.top = `${videoRect.top}px`;
+            canvas.style.left = `${videoRect.left}px`;
+            canvas.style.width = `${videoRect.width}px`;
+            canvas.style.height = `${videoRect.height}px`;
+          }
         }
       }
 
       if (arScene) {
+        arScene.style.position = 'fixed';
+        arScene.style.inset = '0';
+        arScene.style.width = '100vw';
+        arScene.style.height = '100dvh';
+        arScene.style.margin = '0';
+        arScene.style.transform = 'none';
         arScene.style.zIndex = '1';
         arScene.style.background = 'transparent';
-        arScene.style.overflow = 'visible';
+        arScene.style.overflow = 'hidden';
       }
     }
 
@@ -276,7 +294,13 @@
 
       const tick = () => {
         if (waitId !== cameraReadyWaitId || cameraErrorMessage) return;
-        if (updateCameraStatus()) return;
+        if (updateCameraStatus()) {
+          syncARLayers();
+          window.requestAnimationFrame(syncARLayers);
+          window.setTimeout(syncARLayers, 250);
+          window.setTimeout(syncARLayers, 1000);
+          return;
+        }
 
         if (performance.now() - startedAt >= timeoutMs) {
           statusEl.textContent = '📷 カメラ映像を取得できません。権限と再読み込みを確認してください';
@@ -380,6 +404,7 @@
       // マーカー検出イベント（連続Lost検出追加 + 詳細ログ）
       marker.addEventListener('markerFound', (event) => {
         const now = new Date().toLocaleTimeString();
+        syncARLayers();
         
         // minConfidenceを初期値に戻す（検出成功時）
         const currentConfidence = marker.getAttribute('minConfidence');
