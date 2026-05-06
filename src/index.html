@@ -125,13 +125,36 @@
     }
     #arjs-video,
     body > video {
+      position: fixed !important;
+      top: var(--ar-layer-top, 0px) !important;
+      left: var(--ar-layer-left, 0px) !important;
+      right: auto !important;
+      bottom: auto !important;
+      width: var(--ar-layer-width, var(--ar-layout-width, 100vw)) !important;
+      height: var(--ar-layer-height, var(--ar-layout-height, 100vh)) !important;
       z-index: 0 !important;
+      margin: 0 !important;
+      max-width: none !important;
+      max-height: none !important;
       background: transparent !important;
+      object-fit: cover !important;
+      object-position: center center !important;
+      transform: none !important;
     }
     /* A-Frame Stats（パフォーマンス監視） */
     .a-canvas {
       position: fixed !important;
+      top: var(--ar-layer-top, 0px) !important;
+      left: var(--ar-layer-left, 0px) !important;
+      right: auto !important;
+      bottom: auto !important;
+      width: var(--ar-layer-width, var(--ar-layout-width, 100vw)) !important;
+      height: var(--ar-layer-height, var(--ar-layout-height, 100vh)) !important;
+      margin: 0 !important;
+      max-width: none !important;
+      max-height: none !important;
       background: transparent !important;
+      transform: none !important;
       z-index: 1 !important;
     }
     .rs-base {
@@ -157,7 +180,7 @@
 
   <a-scene
     embedded
-    arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
+    arjs="sourceType: webcam; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
     renderer="alpha: true; antialias: true; logarithmicDepthBuffer: true; precision: medium;"
     vr-mode-ui="enabled: false"
     id="ar-scene"
@@ -217,6 +240,7 @@
     let cameraErrorMessage = '';
     let cameraReadyWaitId = 0;
     let lastStableARVideoRect = null;
+    let lastRendererSizeKey = '';
 
     function cloneRect(rect) {
       return {
@@ -225,6 +249,79 @@
         width: rect.width,
         height: rect.height
       };
+    }
+
+    function readPixelVariable(name) {
+      const rawValue = getComputedStyle(document.documentElement).getPropertyValue(name);
+      const parsed = Number.parseFloat(rawValue);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    }
+
+    function getARLayoutSize() {
+      return {
+        width: readPixelVariable('--ar-layout-width')
+          || document.documentElement.clientWidth
+          || window.innerWidth,
+        height: readPixelVariable('--ar-layout-height')
+          || document.documentElement.clientHeight
+          || window.innerHeight
+      };
+    }
+
+    function getVideoDisplaySize(video, layoutSize) {
+      let mediaWidth = video?.videoWidth || 0;
+      let mediaHeight = video?.videoHeight || 0;
+
+      if (mediaWidth <= 0 || mediaHeight <= 0) {
+        return null;
+      }
+
+      // iOS/Androidではセンサー向きの横長サイズが返ることがある。
+      // 表示viewportに近い向きを採用し、videoとcanvasを同じ比率で中央クロップする。
+      const layoutRatio = layoutSize.width / layoutSize.height;
+      const rawRatio = mediaWidth / mediaHeight;
+      const swappedRatio = mediaHeight / mediaWidth;
+      if (isMobile && Math.abs(swappedRatio - layoutRatio) < Math.abs(rawRatio - layoutRatio)) {
+        [mediaWidth, mediaHeight] = [mediaHeight, mediaWidth];
+      }
+
+      return { width: mediaWidth, height: mediaHeight };
+    }
+
+    function getCoverRect(mediaSize, layoutSize) {
+      const mediaRatio = mediaSize.width / mediaSize.height;
+      const layoutRatio = layoutSize.width / layoutSize.height;
+      let width = layoutSize.width;
+      let height = layoutSize.height;
+
+      if (layoutRatio > mediaRatio) {
+        height = width / mediaRatio;
+      } else {
+        width = height * mediaRatio;
+      }
+
+      return {
+        top: (layoutSize.height - height) / 2,
+        left: (layoutSize.width - width) / 2,
+        width,
+        height
+      };
+    }
+
+    function getARLayerRect(video) {
+      const layoutSize = getARLayoutSize();
+      const mediaSize = getVideoDisplaySize(video, layoutSize);
+
+      if (!mediaSize) {
+        return {
+          top: 0,
+          left: 0,
+          width: layoutSize.width,
+          height: layoutSize.height
+        };
+      }
+
+      return getCoverRect(mediaSize, layoutSize);
     }
 
     function isKeyboardOverlayActive() {
@@ -240,52 +337,82 @@
       element.style.left = `${rect.left}px`;
       element.style.width = `${rect.width}px`;
       element.style.height = `${rect.height}px`;
+      element.style.right = 'auto';
+      element.style.bottom = 'auto';
       element.style.maxWidth = 'none';
       element.style.maxHeight = 'none';
       element.style.margin = '0';
+      element.style.marginTop = '0';
+      element.style.marginRight = '0';
+      element.style.marginBottom = '0';
+      element.style.marginLeft = '0';
       element.style.transform = 'none';
     }
 
-    // AR.jsはvideoを端末比率に合わせて中央クロップするため、canvasを実測video矩形へ同期する。
-    // CSS文字列だけのコピーでは親要素オフセットが残り、iOS縦画面でアバターだけ画面外へずれる。
-    // 入力中はvisualViewportが縮むので、最後に正常だったAR矩形を保持して背景を押し上げない。
+    function setARLayerVariables(rect) {
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+      const rootStyle = document.documentElement.style;
+      rootStyle.setProperty('--ar-layer-top', `${rect.top}px`);
+      rootStyle.setProperty('--ar-layer-left', `${rect.left}px`);
+      rootStyle.setProperty('--ar-layer-width', `${rect.width}px`);
+      rootStyle.setProperty('--ar-layer-height', `${rect.height}px`);
+    }
+
+    function syncRendererSize(rect) {
+      if (!scene?.renderer || !rect || rect.width <= 0 || rect.height <= 0) return;
+
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      const sizeKey = `${width}x${height}`;
+      const pixelRatio = scene.renderer.getPixelRatio?.() || window.devicePixelRatio || 1;
+      const expectedBufferWidth = Math.round(width * pixelRatio);
+      const expectedBufferHeight = Math.round(height * pixelRatio);
+      const canvas = scene.renderer.domElement;
+      if (
+        sizeKey === lastRendererSizeKey
+        && canvas.width === expectedBufferWidth
+        && canvas.height === expectedBufferHeight
+      ) {
+        return;
+      }
+
+      scene.renderer.setSize(width, height, false);
+      lastRendererSizeKey = sizeKey;
+    }
+
+    // AR.jsのvideoとA-Frame canvasを、同じ表示比率・同じ中央クロップ矩形に固定する。
+    // videoだけviewportへ引き伸ばすとカメラ映像が縦長になり、canvasだけ別矩形だとVRM位置がずれる。
+    // 入力中はvisualViewportが縮むため、最後に正常だったAR矩形を保持して背景を押し上げない。
     function syncARLayers() {
       const video = document.querySelector('#arjs-video');
       const canvas = document.querySelector('.a-canvas');
       const arScene = document.querySelector('#ar-scene');
       const keyboardActive = isKeyboardOverlayActive();
-      let targetRect = lastStableARVideoRect;
+      const nextRect = getARLayerRect(video);
+      let targetRect = keyboardActive && lastStableARVideoRect
+        ? lastStableARVideoRect
+        : nextRect;
+
+      if (!keyboardActive && targetRect.width > 0 && targetRect.height > 0) {
+        lastStableARVideoRect = cloneRect(targetRect);
+      }
+      setARLayerVariables(targetRect);
 
       if (video) {
         video.style.zIndex = '0';
         video.style.background = 'transparent';
         video.style.objectFit = 'cover';
-
-        const videoRect = video.getBoundingClientRect();
-        if (videoRect.width > 0 && videoRect.height > 0 && !keyboardActive) {
-          lastStableARVideoRect = cloneRect(videoRect);
-          targetRect = lastStableARVideoRect;
-        }
-
-        if (keyboardActive && lastStableARVideoRect) {
-          targetRect = lastStableARVideoRect;
-        } else if (videoRect.width > 0 && videoRect.height > 0) {
-          targetRect = cloneRect(videoRect);
-        }
-
-        if (targetRect && keyboardActive) {
-          applyFixedLayerRect(video, targetRect);
-        }
+        video.style.objectPosition = 'center center';
+        applyFixedLayerRect(video, targetRect);
       }
 
       if (canvas) {
         canvas.style.position = 'fixed';
         canvas.style.zIndex = '1';
         canvas.style.background = 'transparent';
-
-        if (targetRect) {
-          applyFixedLayerRect(canvas, targetRect);
-        }
+        applyFixedLayerRect(canvas, targetRect);
+        syncRendererSize(targetRect);
       }
 
       if (arScene) {
@@ -377,6 +504,11 @@
       window.requestAnimationFrame(syncARLayers);
       window.setTimeout(syncARLayers, 250);
     });
+    window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncARLayers();
+      }
+    }, 500);
 
     // デバッグモード通知とStats有効化
     if (DEBUG_MODE) {
