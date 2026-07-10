@@ -237,7 +237,8 @@
     let arDiagnosticsTimer = null;
 
     function getThreeCamera() {
-      return scene?.camera?.getObject3D('camera') || null;
+      // A-Frame sceneEl.camera は既に THREE.Camera
+      return scene?.camera || null;
     }
 
     function getARSession() {
@@ -318,21 +319,24 @@
 
       const videoAspect = videoWidth / videoHeight;
       const displayAspect = displayWidth / displayHeight;
+      // cover クロップ: 切り取られる軸をズームして投影を合わせる
       if (displayAspect > videoAspect) {
-        return { scaleX: 1, scaleY: videoAspect / displayAspect };
+        return { scaleX: 1, scaleY: displayAspect / videoAspect }; // crop top/bottom → zoom Y
       }
-      return { scaleX: displayAspect / videoAspect, scaleY: 1 };
+      return { scaleX: videoAspect / displayAspect, scaleY: 1 }; // crop sides → zoom X
     }
 
     function applyProjectionCoverCorrection() {
       const camera = getThreeCamera();
       const video = getCameraVideo();
       const arSession = getARSession();
-      if (!camera?.projectionMatrix || !video || !arSession?.arController) return;
+      const arController = arSession?.arController || arSession?.arContext?.arController;
+      if (!camera?.projectionMatrix || !video || !arController) return;
       if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
+      if (typeof arController.getCameraMatrix !== 'function') return;
 
       const layoutSize = getViewportSize();
-      camera.projectionMatrix.fromArray(arSession.arController.getCameraMatrix());
+      camera.projectionMatrix.fromArray(arController.getCameraMatrix());
       const { scaleX, scaleY } = getCoverProjectionScale(
         video.videoWidth,
         video.videoHeight,
@@ -355,11 +359,9 @@
 
       if (arSession?.arSource) {
         arSession.arSource.onResizeElement();
-        if (canvas) {
-          arSession.arSource.copyElementSizeTo(canvas);
-        }
-        if (arSession.arController?.canvas) {
-          arSession.arSource.copyElementSizeTo(arSession.arController.canvas);
+        const arController = arSession.arController || arSession.arContext?.arController;
+        if (arController?.canvas) {
+          arSession.arSource.copyElementSizeTo(arController.canvas);
         }
       } else if (arSession && typeof arSession.onResize === 'function') {
         arSession.onResize();
