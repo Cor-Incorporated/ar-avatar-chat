@@ -241,6 +241,76 @@
     let cameraReadyWaitId = 0;
     let lastStableARVideoRect = null;
     let lastRendererSizeKey = '';
+    let arDiagnosticsTimer = null;
+
+    function getThreeCamera() {
+      return scene?.camera?.getObject3D('camera') || null;
+    }
+
+    function getARSession() {
+      return scene?.systems?.arjs?._arSession || null;
+    }
+
+    // ADR-001: 実機計測で投影行列とビューポート不整合を裏取りする
+    function logARDiagnostics(label = 'AR') {
+      if (!DEBUG_MODE) return;
+
+      const video = document.querySelector('#arjs-video');
+      const canvas = scene?.renderer?.domElement || document.querySelector('.a-canvas');
+      const camera = getThreeCamera();
+      const arSession = getARSession();
+      const projection = camera?.projectionMatrix;
+      const layoutSize = getARLayoutSize();
+
+      debugLog(`[AR-Diag:${label}]`, {
+        window: { width: window.innerWidth, height: window.innerHeight },
+        visualViewport: window.visualViewport
+          ? {
+              width: window.visualViewport.width,
+              height: window.visualViewport.height,
+              offsetTop: window.visualViewport.offsetTop,
+              offsetLeft: window.visualViewport.offsetLeft
+            }
+          : null,
+        layout: layoutSize,
+        videoIntrinsic: {
+          width: video?.videoWidth || 0,
+          height: video?.videoHeight || 0
+        },
+        videoDisplay: video
+          ? {
+              offsetWidth: video.offsetWidth,
+              offsetHeight: video.offsetHeight,
+              clientWidth: video.clientWidth,
+              clientHeight: video.clientHeight
+            }
+          : null,
+        canvas: canvas
+          ? {
+              bufferWidth: canvas.width,
+              bufferHeight: canvas.height,
+              cssWidth: canvas.offsetWidth,
+              cssHeight: canvas.offsetHeight
+            }
+          : null,
+        projectionMatrix: projection
+          ? {
+              m00: projection.elements[0],
+              m11: projection.elements[5],
+              m22: projection.elements[10]
+            }
+          : null,
+        arSourceParameters: arSession?.arSource?.parameters || null
+      });
+    }
+
+    function scheduleARDiagnostics(label) {
+      if (!DEBUG_MODE) return;
+      if (arDiagnosticsTimer) {
+        window.clearTimeout(arDiagnosticsTimer);
+      }
+      arDiagnosticsTimer = window.setTimeout(() => logARDiagnostics(label), 100);
+    }
 
     function cloneRect(rect) {
       return {
@@ -426,6 +496,8 @@
         arScene.style.background = 'transparent';
         arScene.style.overflow = 'hidden';
       }
+
+      scheduleARDiagnostics('syncARLayers');
     }
 
     function getCameraVideo() {
@@ -518,6 +590,7 @@
       console.log('🔍 デバッグモード有効 - 詳細ログとStatsを表示します');
       console.log('   本番環境では ?debug=true を削除してください');
       console.log('   使用方法: https://your-domain.com/?debug=true');
+      scheduleARDiagnostics('debug-init');
     }
 
     scene.addEventListener('loaded', () => {
