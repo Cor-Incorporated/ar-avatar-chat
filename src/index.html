@@ -543,7 +543,10 @@
           const materials = Array.isArray(child.material) ? child.material : [child.material];
           materials.forEach((material) => {
             if (!material) return;
-            material.transparent = true;
+            if (material.userData.__origTransparent === undefined) {
+              material.userData.__origTransparent = material.transparent;
+            }
+            material.transparent = opacity < 1 ? true : material.userData.__origTransparent;
             material.opacity = opacity;
             material.needsUpdate = true;
           });
@@ -632,6 +635,7 @@
       }
 
       function beginMarkerGrace() {
+        if (avatarDetachedForGrace) return;
         if (!avatarReady || !avatarEl || !lastAvatarWorldMatrix) return;
         detachAvatarWithFrozenPose();
         scheduleMarkerGraceEnd();
@@ -642,11 +646,6 @@
         restoreAvatarToMarker();
       }
 
-      scene.addEventListener('tick', () => {
-        if (markerVisible && avatarReady) {
-          captureAvatarWorldPose();
-        }
-      });
 
       window.addEventListener('ar-marker-grace-keyboard-change', (event) => {
         if (!markerGraceActive || markerVisible) return;

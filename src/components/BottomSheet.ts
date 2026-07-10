@@ -33,6 +33,8 @@ export class BottomSheet {
   private stableViewportHeight: number = window.innerHeight;
   private blurReleaseTimer: number | null = null;
   private keyboardCorrectionFrameId: number | null = null;
+  private lastAppliedOffsetX: number | null = null;
+  private lastAppliedOffsetY: number | null = null;
 
   private config: BottomSheetConfig = {
     collapsedHeight: 120,
@@ -260,7 +262,9 @@ export class BottomSheet {
         return;
       }
 
-      window.scrollTo(0, this.lockedScrollY);
+      if ((window.scrollY || document.documentElement.scrollTop || 0) !== this.lockedScrollY) {
+        window.scrollTo(0, this.lockedScrollY);
+      }
       this.applyARViewportOffsetCompensation();
       this.keyboardCorrectionFrameId = window.requestAnimationFrame(step);
     };
@@ -280,12 +284,22 @@ export class BottomSheet {
     const viewport = window.visualViewport;
     const offsetTop = viewport?.offsetTop ?? 0;
     const offsetLeft = viewport?.offsetLeft ?? 0;
+    const offsetX = -offsetLeft;
+    const offsetY = -offsetTop;
 
-    document.documentElement.style.setProperty('--ar-vv-offset-x', `${-offsetLeft}px`);
-    document.documentElement.style.setProperty('--ar-vv-offset-y', `${-offsetTop}px`);
+    if (this.lastAppliedOffsetX === offsetX && this.lastAppliedOffsetY === offsetY) {
+      return;
+    }
+
+    this.lastAppliedOffsetX = offsetX;
+    this.lastAppliedOffsetY = offsetY;
+    document.documentElement.style.setProperty('--ar-vv-offset-x', `${offsetX}px`);
+    document.documentElement.style.setProperty('--ar-vv-offset-y', `${offsetY}px`);
   }
 
   private clearARViewportOffsetCompensation(): void {
+    this.lastAppliedOffsetX = null;
+    this.lastAppliedOffsetY = null;
     document.documentElement.style.setProperty('--ar-vv-offset-x', '0px');
     document.documentElement.style.setProperty('--ar-vv-offset-y', '0px');
   }
