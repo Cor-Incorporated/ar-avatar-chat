@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { google } from 'googleapis';
-import type { CalendarEvent, ChatAttachment, GeminiResponse } from '../types/chat.types.js';
+import type { CalendarEvent, ChatAttachment, ConversationHistoryItem, GeminiResponse } from '../types/chat.types.js';
 import type { EmotionType } from '../types/emotion.types.js';
 
 // レスポンススキーマの定義
@@ -84,7 +84,7 @@ const CLAUDIA_CHARACTER_INSTRUCTION = `
 - 自分の役割（Cor.Inc.のAIアンバサダー）を意識して会話すること
 `;
 
-const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
@@ -134,7 +134,7 @@ function normalizeImageAttachments(attachments: ChatAttachment[] = []): ChatAtta
     .slice(0, 3);
 }
 
-function buildUserContents(userPrompt: string, attachments: ChatAttachment[] = []): string | GeminiContentPart[] {
+function buildUserParts(userPrompt: string, attachments: ChatAttachment[] = []): GeminiContentPart[] {
   const imageParts = normalizeImageAttachments(attachments).map((attachment) => ({
     inlineData: {
       mimeType: attachment.mimeType,
@@ -142,16 +142,66 @@ function buildUserContents(userPrompt: string, attachments: ChatAttachment[] = [
     },
   }));
 
-  if (imageParts.length === 0) {
-    return userPrompt;
-  }
-
   return [
     ...imageParts,
     {
       text: userPrompt || '添付された画像について説明してください。',
     },
   ];
+}
+
+type GeminiContent = {
+  role: 'user' | 'model';
+  parts: GeminiContentPart[];
+};
+
+/**
+ * 会話履歴 + 今回のユーザー発話を Gemini contents 形式へ展開する
+ */
+function buildContents(
+  userPrompt: string,
+  attachments: ChatAttachment[] = [],
+  conversationHistory: ConversationHistoryItem[] = []
+): GeminiContent[] {
+  const historyContents: GeminiContent[] = conversationHistory
+    .filter((turn) => turn.role === 'user' || turn.role === 'model')
+    .filter((turn) => typeof turn.content === 'string' && turn.content.trim().length > 0)
+    .slice(-20) // 直近10往復（20メッセージ）まで
+    .map((turn) => ({
+      role: turn.role,
+      parts: [{ text: turn.content }],
+    }));
+
+  return [
+    ...historyContents,
+    {
+      role: 'user',
+      parts: buildUserParts(userPrompt, attachments),
+    },
+  ];
+}
+
+function parseStructuredResponse(rawText: string | undefined, fallbackEmotion: EmotionType = 'neutral'): GeminiResponse | null {
+  if (!rawText) {
+    return null;
+  }
+
+  try {
+    const parsedResponse = JSON.parse(rawText);
+    if (typeof parsedResponse.message === 'string') {
+      return {
+        text: parsedResponse.message,
+        emotion: (parsedResponse.emotion as EmotionType) || fallbackEmotion,
+      };
+    }
+  } catch {
+    // JSON以外の応答はそのまま返す
+  }
+
+  return {
+    text: rawText,
+    emotion: fallbackEmotion,
+  };
 }
 
 function shouldTryFunctionCallingFirst(userPrompt: string): boolean {
@@ -254,43 +304,68 @@ async function execute_calendar_events(
 
 /**
  * Function Calling処理（Structured Output対応）
+ * 非カレンダー会話: tools + responseSchema の単一 generateContent
+ * カレンダー会話: function calling ループ
  */
 export async function handleFunctionCalling(
   apiKey: string,
   userPrompt: string,
   oauthToken: string | null,
-  attachments: ChatAttachment[] = []
+  attachments: ChatAttachment[] = [],
+  conversationHistory: ConversationHistoryItem[] = []
 ): Promise<GeminiResponse> {
   const ai = new GoogleGenAI({ apiKey });
-  const userContents = buildUserContents(userPrompt, attachments);
+  const contents = buildContents(userPrompt, attachments, conversationHistory);
   const tryFunctionCallingFirst = shouldTryFunctionCallingFirst(userPrompt);
 
-  // まずStructured Outputで直接応答を試みる（Function Calling不要の場合）
-  if (!tryFunctionCallingFirst) {
-    const directResponse = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: userContents,
-      config: buildGenerationConfig(true)
-    });
-
-    if (directResponse.text) {
-      try {
-        const parsedResponse = JSON.parse(directResponse.text);
-        return {
-          text: parsedResponse.message,
-          emotion: parsedResponse.emotion as EmotionType
-        };
-      } catch (parseError) {
-        // JSON解析失敗 - Function Callingが必要かもしれない
-        console.log('[Info] Structured Outputのみでは不十分、Function Calling試行');
-      }
-    }
+  // カレンダー系は従来どおり function calling ループ
+  if (tryFunctionCallingFirst) {
+    return handleCalendarFunctionCalling(ai, contents, userPrompt, oauthToken);
   }
 
-  // Function Calling対応（Structured OutputなしのAPIコール）
-  const fcResponse = await ai.models.generateContent({
+  // 非カレンダー: tools + responseSchema を併用した単一呼び出し
+  console.log('[Gemini] single generateContent (tools + responseSchema)');
+  const directResponse = await ai.models.generateContent({
     model: MODEL_NAME,
-    contents: userContents,
+    contents,
+    config: {
+      ...buildGenerationConfig(true),
+      tools: [{ functionDeclarations }],
+    }
+  });
+
+  // 稀に function call が返る場合はカレンダー経路へフォールバック
+  if (directResponse.functionCalls && directResponse.functionCalls.length > 0) {
+    console.log('[Gemini] function call detected in non-calendar path, switching to calendar loop');
+    return handleCalendarFunctionCalling(ai, contents, userPrompt, oauthToken, directResponse);
+  }
+
+  const parsed = parseStructuredResponse(directResponse.text);
+  if (parsed) {
+    return parsed;
+  }
+
+  return {
+    text: '応答がありません。',
+    emotion: 'neutral',
+  };
+}
+
+/**
+ * カレンダー予定取得向けの function calling ループ
+ */
+async function handleCalendarFunctionCalling(
+  ai: GoogleGenAI,
+  contents: GeminiContent[],
+  userPrompt: string,
+  oauthToken: string | null,
+  initialResponse?: Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>
+): Promise<GeminiResponse> {
+  console.log('[Gemini] calendar function calling loop');
+
+  let currentResponse = initialResponse ?? await ai.models.generateContent({
+    model: MODEL_NAME,
+    contents,
     config: {
       ...buildGenerationConfig(false),
       tools: [{ functionDeclarations }],
@@ -299,7 +374,6 @@ export async function handleFunctionCalling(
 
   let iteration = 0;
   const MAX_ITERATIONS = 5;
-  let currentResponse = fcResponse;
 
   while (iteration < MAX_ITERATIONS) {
     iteration++;
@@ -307,8 +381,7 @@ export async function handleFunctionCalling(
     const functionCalls = currentResponse.functionCalls;
 
     if (!functionCalls || functionCalls.length === 0) {
-      // Function Call不要 - テキストから感情を抽出
-      const text = currentResponse.text || "応答がありません。";
+      const text = currentResponse.text || '応答がありません。';
 
       // Structured Outputで再フォーマット
       const formattedResponse = await ai.models.generateContent({
@@ -317,29 +390,17 @@ export async function handleFunctionCalling(
         config: buildGenerationConfig(true)
       });
 
-      if (formattedResponse.text) {
-        try {
-          const parsedResponse = JSON.parse(formattedResponse.text);
-          return {
-            text: parsedResponse.message,
-            emotion: parsedResponse.emotion as EmotionType
-          };
-        } catch (parseError) {
-          console.error('[Parse Error]:', parseError);
-          return {
-            text: text,
-            emotion: "neutral"
-          };
-        }
-      } else {
-        return {
-          text: "応答の解析に失敗しました。",
-          emotion: "neutral"
-        };
+      const parsed = parseStructuredResponse(formattedResponse.text);
+      if (parsed) {
+        return parsed;
       }
+
+      return {
+        text,
+        emotion: 'neutral',
+      };
     }
 
-    // Function Callsの処理
     const functionResponses: Array<{ name: string; response: CalendarExecutionResult }> = [];
     for (const functionCall of functionCalls) {
       const functionName = functionCall.name || 'unknown';
@@ -373,33 +434,31 @@ export async function handleFunctionCalling(
     });
 
     if (finalResponse.text) {
-      try {
-        const parsedResponse = JSON.parse(finalResponse.text);
+      const parsed = parseStructuredResponse(finalResponse.text);
+      if (parsed) {
         return {
-          text: parsedResponse.message,
-          emotion: parsedResponse.emotion as EmotionType,
+          ...parsed,
           functionCall: {
             name: functionResponses[0].name,
             args: functionResponses[0].response as unknown as Record<string, unknown>
           }
         };
-      } catch (parseError) {
-        console.error('[Parse Error]:', parseError);
-        return {
-          text: "応答の解析に失敗しました。",
-          emotion: "neutral"
-        };
       }
-    } else {
+
       return {
-        text: "応答の解析に失敗しました。",
-        emotion: "neutral"
+        text: '応答の解析に失敗しました。',
+        emotion: 'neutral'
       };
     }
+
+    return {
+      text: '応答の解析に失敗しました。',
+      emotion: 'neutral'
+    };
   }
 
   return {
-    text: "処理が複雑すぎました。もう一度お試しください。",
-    emotion: "neutral"
+    text: '処理が複雑すぎました。もう一度お試しください。',
+    emotion: 'neutral'
   };
 }

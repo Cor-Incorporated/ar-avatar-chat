@@ -31,6 +31,7 @@ export class ChatController {
         body: JSON.stringify({
           message: payload.message,
           attachments: payload.attachments,
+          conversationHistory: payload.conversationHistory,
         }),
       });
 

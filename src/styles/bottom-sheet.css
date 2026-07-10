@@ -275,17 +275,29 @@ body.keyboard-overlay-active {
   display: none;
 }
 
-.bottom-sheet-attach {
+.attachment-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.bottom-sheet-attach,
+.bottom-sheet-camera {
   width: 44px;
   height: 44px;
-  border: none;
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.82);
-  color: #333;
-  font-size: 26px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #222;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
 .bottom-sheet-input {
@@ -319,6 +331,7 @@ body.keyboard-overlay-active {
 }
 
 .bottom-sheet-attach:active,
+.bottom-sheet-camera:active,
 .attachment-remove:active {
   transform: scale(0.96);
 }
@@ -362,9 +375,11 @@ body.keyboard-overlay-active {
     padding: 8px 16px;
   }
 
-  .bottom-sheet-attach {
+  .bottom-sheet-attach,
+  .bottom-sheet-camera {
     width: 40px;
     height: 40px;
+    font-size: 18px;
   }
 }
 
@@ -379,9 +394,11 @@ body.keyboard-overlay-active {
     font-size: 14px;
   }
 
-  .bottom-sheet-attach {
+  .bottom-sheet-attach,
+  .bottom-sheet-camera {
     width: 40px;
     height: 40px;
+    font-size: 18px;
   }
 
   .message-text {
@@ -410,10 +427,17 @@ body.keyboard-overlay-active {
   }
 
   .attachment-pill,
-  .attachment-error,
-  .bottom-sheet-attach {
+  .attachment-error {
     background: rgba(50, 50, 50, 0.6);
     color: #fff;
+  }
+
+  .bottom-sheet-attach,
+  .bottom-sheet-camera {
+    background: rgba(70, 70, 70, 0.92);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.28);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
   }
 
   .attachment-remove {

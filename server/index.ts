@@ -15,7 +15,7 @@ app.use(bodyParser.json({ limit: '8mb' }));
 
 app.post('/api/chat', async (req: Request<{}, ChatResponse, ChatRequest>, res: Response<ChatResponse | { error: string; message?: string; emotion?: string }>) => {
   try {
-    const { message, oauthToken, attachments } = req.body;
+    const { message, oauthToken, attachments, conversationHistory } = req.body;
     const normalizedMessage = message?.trim() || '';
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
@@ -29,7 +29,8 @@ app.post('/api/chat', async (req: Request<{}, ChatResponse, ChatRequest>, res: R
       process.env.GEMINI_API_KEY!,
       normalizedMessage,
       oauthToken || null,
-      attachments || []
+      attachments || [],
+      conversationHistory || []
     );
 
     console.log('[API] Gemini応答:', result);

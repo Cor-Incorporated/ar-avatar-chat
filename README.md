@@ -59,7 +59,7 @@ ar-avatar-chat/
 **担当**: 開発チーム
 
 ✅ **実装完了項目**:
-1. Gemini 2.5 Flash統合
+1. Gemini 3.1 Flash-Lite統合
 2. チャット機能（博多弁キャラクター「クラウディア」）
 3. 感情認識・アニメーション連携
 4. Google Calendar API連携（Function Calling）
@@ -285,7 +285,7 @@ Phase 1はリサーチャーの調査結果に依存しないため、**並行�
 ### バックエンド
 - **Node.js**: 18+
 - **Express**: 5.1.0
-- **Google Gemini**: 2.5 Flash
+- **Google Gemini**: 3.1 Flash-Lite
 - **TypeScript**: 5.9.3
 - **Google Calendar API**: 連携済み
 

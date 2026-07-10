@@ -26,6 +26,16 @@ export interface ChatAttachment {
   size?: number;
 }
 
+
+/**
+ * API送受信用の会話履歴ターン（直近10往復）
+ * Gemini contents の role は user/model
+ */
+export interface ConversationHistoryItem {
+  role: 'user' | 'model';
+  content: string;
+}
+
 /**
  * チャットAPIレスポンス
  */
@@ -50,6 +60,7 @@ export interface MessageSendEvent {
   message: string;
   oauthToken?: string;
   attachments?: ChatAttachment[];
+  conversationHistory?: ConversationHistoryItem[];
 }
 
 /**
@@ -58,6 +69,7 @@ export interface MessageSendEvent {
 export interface MessageSendPayload {
   message: string;
   attachments?: ChatAttachment[];
+  conversationHistory?: ConversationHistoryItem[];
 }
 
 /**
