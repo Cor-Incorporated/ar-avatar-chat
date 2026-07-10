@@ -121,6 +121,7 @@
       margin: 0 !important;
       background: transparent !important;
       overflow: hidden !important;
+      /* transformは#arjs-video/.a-canvasのみ。親にも付けるとcanvasが二重移動する */
       z-index: 1;
     }
     #arjs-video,
@@ -136,7 +137,7 @@
       background: transparent !important;
       object-fit: cover !important;
       object-position: center center !important;
-      transform: none !important;
+      transform: translate(var(--ar-vv-offset-x, 0px), var(--ar-vv-offset-y, 0px)) !important;
     }
     /* A-Frame Stats（パフォーマンス監視） */
     .a-canvas {
@@ -148,7 +149,7 @@
       max-width: none !important;
       max-height: none !important;
       background: transparent !important;
-      transform: none !important;
+      transform: translate(var(--ar-vv-offset-x, 0px), var(--ar-vv-offset-y, 0px)) !important;
       z-index: 1 !important;
     }
     .rs-base {
@@ -181,6 +182,10 @@
   >
     <a-entity camera></a-entity>
 
+    <!-- シーン直下ライト: markerLost猶予中もアバターが消灯しないようマーカー外に配置 -->
+    <a-light type="ambient" intensity="1.0"></a-light>
+    <a-light type="directional" intensity="0.8" position="1 2 1"></a-light>
+
     <!-- ペンギンロゴカスタムマーカー (モバイル最適化: 高解像度 + 低信頼度閾値) -->
     <a-marker 
       type="pattern" 
@@ -194,10 +199,6 @@
       smoothThreshold="2"
       minConfidence="0.35"
     >
-      <!-- ライト（モバイルGPU負荷低減のため最小限に） -->
-      <a-light type="ambient" intensity="1.0"></a-light>
-      <a-light type="directional" intensity="0.8" position="1 2 1"></a-light>
-
       <!-- VRMアバター -->
       <a-entity
         id="avatar"
@@ -483,10 +484,13 @@
     window.addEventListener('orientationchange', () => scheduleARViewportSync('orientationchange'));
     window.visualViewport?.addEventListener('resize', () => scheduleARViewportSync('visual-viewport-resize'));
     window.visualViewport?.addEventListener('scroll', () => scheduleARViewportSync('visual-viewport-scroll'));
-    window.addEventListener('ar-keyboard-overlay-change', () => {
+    window.addEventListener('ar-keyboard-overlay-change', (event) => {
       scheduleARViewportSync('keyboard-overlay-change');
       window.requestAnimationFrame(() => scheduleARViewportSync('keyboard-overlay-change-raf'));
       window.setTimeout(() => scheduleARViewportSync('keyboard-overlay-change-delay'), 250);
+      window.dispatchEvent(new CustomEvent('ar-marker-grace-keyboard-change', {
+        detail: { active: Boolean(event.detail?.active) }
+      }));
     });
     scene.addEventListener('renderstart', applyProjectionCoverCorrection);
 
@@ -511,6 +515,190 @@
       let lostCount = 0;  // 連続Lost検出カウンター
       const maxLostThreshold = 5;  // 5回連続で横向き提案
       let orientationWarningShown = false;  // 警告表示済みフラグ
+
+      const MARKER_GRACE_MS = 2500;
+      const MARKER_GRACE_FADE_MS = 500;
+      let markerGraceActive = false;
+      let markerGraceTimer = null;
+      let markerGraceFadeFrame = null;
+      let avatarDetachedForGrace = false;
+      let lastAvatarWorldMatrix = null;
+
+      function isChatInputFocused() {
+        return document.documentElement.classList.contains('keyboard-overlay-active');
+      }
+
+      function captureAvatarWorldPose() {
+        if (!avatarEl?.object3D) return;
+        const THREE = AFRAME.THREE;
+        avatarEl.object3D.updateWorldMatrix(true, false);
+        if (!lastAvatarWorldMatrix) {
+          lastAvatarWorldMatrix = new THREE.Matrix4();
+        }
+        lastAvatarWorldMatrix.copy(avatarEl.object3D.matrixWorld);
+      }
+
+      function setAvatarOpacity(opacity) {
+        if (!avatarEl?.object3D) return;
+        const fading = opacity < 1;
+        avatarEl.object3D.traverse((child) => {
+          if (!child.isMesh) return;
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((material) => {
+            if (!material) return;
+            if (material.userData.__graceOpacityCache === undefined) {
+              material.userData.__graceOpacityCache = {
+                transparent: material.transparent,
+                opacity: material.opacity,
+              };
+            }
+            const cache = material.userData.__graceOpacityCache;
+            const nextTransparent = fading ? true : cache.transparent;
+            // transparent切替時のみneedsUpdate（毎フレーム設定するとGPU負荷が増える）
+            if (material.transparent !== nextTransparent) {
+              material.transparent = nextTransparent;
+              material.needsUpdate = true;
+            }
+            material.opacity = fading ? opacity : cache.opacity;
+          });
+        });
+      }
+
+      function restoreAvatarOpacity() {
+        if (!avatarEl?.object3D) return;
+        avatarEl.object3D.traverse((child) => {
+          if (!child.isMesh) return;
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((material) => {
+            if (!material) return;
+            const cache = material.userData.__graceOpacityCache;
+            if (!cache) return;
+            if (material.transparent !== cache.transparent) {
+              material.transparent = cache.transparent;
+              material.needsUpdate = true;
+            }
+            material.opacity = cache.opacity;
+            delete material.userData.__graceOpacityCache;
+          });
+        });
+      }
+
+      function cancelMarkerGraceTimers() {
+        if (markerGraceTimer) {
+          window.clearTimeout(markerGraceTimer);
+          markerGraceTimer = null;
+        }
+        if (markerGraceFadeFrame) {
+          window.cancelAnimationFrame(markerGraceFadeFrame);
+          markerGraceFadeFrame = null;
+        }
+      }
+
+      function restoreAvatarToMarker() {
+        if (!avatarDetachedForGrace || !avatarEl || !marker) return;
+        marker.appendChild(avatarEl);
+        avatarEl.setAttribute('position', '0 0 0');
+        avatarEl.setAttribute('rotation', '0 0 0');
+        avatarEl.setAttribute('scale', '0.78 0.78 0.78');
+        avatarEl.object3D.visible = true;
+        restoreAvatarOpacity();
+        avatarDetachedForGrace = false;
+        markerGraceActive = false;
+        debugLog('[MarkerGrace] アバターをマーカーへ復帰');
+      }
+
+      function detachAvatarWithFrozenPose() {
+        if (!avatarEl || !marker || !scene || !lastAvatarWorldMatrix) return;
+        scene.appendChild(avatarEl);
+        avatarEl.object3D.matrix.copy(lastAvatarWorldMatrix);
+        avatarEl.object3D.matrix.decompose(
+          avatarEl.object3D.position,
+          avatarEl.object3D.quaternion,
+          avatarEl.object3D.scale
+        );
+        avatarEl.object3D.matrixWorldNeedsUpdate = true;
+        avatarEl.object3D.visible = true;
+        restoreAvatarOpacity();
+        avatarDetachedForGrace = true;
+        markerGraceActive = true;
+        debugLog('[MarkerGrace] 最終ポーズで表示継続');
+      }
+
+      function fadeOutAvatarGrace(onComplete) {
+        const fadeStart = performance.now();
+        const step = (now) => {
+          const elapsed = now - fadeStart;
+          const progress = Math.min(1, elapsed / MARKER_GRACE_FADE_MS);
+          setAvatarOpacity(1 - progress);
+          if (progress < 1) {
+            markerGraceFadeFrame = window.requestAnimationFrame(step);
+            return;
+          }
+          markerGraceFadeFrame = null;
+          if (avatarEl?.object3D) {
+            avatarEl.object3D.visible = false;
+          }
+          onComplete();
+        };
+        markerGraceFadeFrame = window.requestAnimationFrame(step);
+      }
+
+      function scheduleMarkerGraceEnd() {
+        cancelMarkerGraceTimers();
+        if (!markerGraceActive || markerVisible) return;
+        if (isChatInputFocused()) {
+          debugLog('[MarkerGrace] チャット入力中のため猶予を継続');
+          return;
+        }
+        markerGraceTimer = window.setTimeout(() => {
+          markerGraceTimer = null;
+          if (markerVisible || isChatInputFocused()) return;
+          debugLog('[MarkerGrace] 猶予終了 - フェードアウト開始');
+          fadeOutAvatarGrace(() => {
+            restoreAvatarToMarker();
+          });
+        }, MARKER_GRACE_MS);
+      }
+
+      function beginMarkerGrace() {
+        if (avatarDetachedForGrace) return;
+        if (!avatarReady || !avatarEl || !lastAvatarWorldMatrix) return;
+        detachAvatarWithFrozenPose();
+        scheduleMarkerGraceEnd();
+      }
+
+      function endMarkerGrace() {
+        cancelMarkerGraceTimers();
+        restoreAvatarToMarker();
+      }
+
+      // A-FrameのtickはDOMイベントではないため、コンポーネントで毎フレームポーズを更新
+      if (!AFRAME.components['grace-pose-capturer']) {
+        AFRAME.registerComponent('grace-pose-capturer', {
+          tick() {
+            if (markerVisible && avatarReady) {
+              captureAvatarWorldPose();
+            }
+          }
+        });
+      }
+      if (!scene.hasAttribute('grace-pose-capturer')) {
+        scene.setAttribute('grace-pose-capturer', '');
+      }
+
+      window.addEventListener('ar-marker-grace-keyboard-change', (event) => {
+        if (!markerGraceActive || markerVisible) return;
+        if (event.detail?.active) {
+          cancelMarkerGraceTimers();
+          restoreAvatarOpacity();
+          if (avatarEl?.object3D) {
+            avatarEl.object3D.visible = true;
+          }
+          debugLog('[MarkerGrace] キーボード表示 - 猶予を無期限継続');
+          return;
+        }
+        scheduleMarkerGraceEnd();
+      });
 
       function markAvatarReady() {
         avatarReady = true;
@@ -563,6 +751,7 @@
       marker.addEventListener('markerFound', (event) => {
         const now = new Date().toLocaleTimeString();
         scheduleARViewportSync('marker-found');
+        endMarkerGrace();
         
         // minConfidenceを初期値に戻す（検出成功時）
         const currentConfidence = marker.getAttribute('minConfidence');
@@ -602,15 +791,21 @@
           vrmLoaded = true;
         }
 
+        captureAvatarWorldPose();
+
         if (avatarReady && window.ensureIdleEmotion) {
           window.ensureIdleEmotion();
         }
       });
 
       marker.addEventListener('markerLost', () => {
+        captureAvatarWorldPose();
         markerVisible = false;
         lostCount++;
         debugLog(`[Marker] 検出ロスト (${lostCount}/${maxLostThreshold})`);
+        if (avatarReady) {
+          beginMarkerGrace();
+        }
         statusEl.textContent = '⏳ マーカーが見えません';
         info.classList.remove('hidden');
 

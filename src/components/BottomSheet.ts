@@ -32,6 +32,9 @@ export class BottomSheet {
   private stableViewportWidth: number = window.innerWidth;
   private stableViewportHeight: number = window.innerHeight;
   private blurReleaseTimer: number | null = null;
+  private keyboardCorrectionFrameId: number | null = null;
+  private lastAppliedOffsetX: number | null = null;
+  private lastAppliedOffsetY: number | null = null;
 
   private config: BottomSheetConfig = {
     collapsedHeight: 120,
@@ -176,8 +179,6 @@ export class BottomSheet {
 
     if (!this.keyboardOverlayActive && keyboardOffset === 0) {
       this.captureStableViewport();
-    } else if (this.keyboardOverlayActive) {
-      this.restoreLockedScroll();
     }
   };
 
@@ -230,12 +231,13 @@ export class BottomSheet {
     document.body.style.setProperty('--locked-scroll-y', `${this.lockedScrollY}px`);
 
     window.dispatchEvent(new CustomEvent('ar-keyboard-overlay-change', { detail: { active: true } }));
-    this.restoreLockedScroll();
+    this.startKeyboardCorrectionLoop();
   }
 
   private deactivateKeyboardOverlay(): void {
     if (!this.keyboardOverlayActive) return;
 
+    this.stopKeyboardCorrectionLoop();
     this.keyboardOverlayActive = false;
     document.documentElement.classList.remove('keyboard-overlay-active');
     document.body.classList.remove('keyboard-overlay-active');
@@ -247,13 +249,59 @@ export class BottomSheet {
     window.scrollTo(0, this.lockedScrollY);
   }
 
-  private restoreLockedScroll(): void {
-    if (!this.keyboardOverlayActive) return;
+  /**
+   * iOS Safariの連続ビューポート変化に追従するため、キーボード表示中はrAFで補正を維持する。
+   */
+  private startKeyboardCorrectionLoop(): void {
+    if (this.keyboardCorrectionFrameId !== null) return;
 
-    window.requestAnimationFrame(() => {
-      if (!this.keyboardOverlayActive) return;
-      window.scrollTo(0, this.lockedScrollY);
-    });
+    const step = (): void => {
+      if (!this.keyboardOverlayActive) {
+        this.keyboardCorrectionFrameId = null;
+        this.clearARViewportOffsetCompensation();
+        return;
+      }
+
+      if ((window.scrollY || document.documentElement.scrollTop || 0) !== this.lockedScrollY) {
+        window.scrollTo(0, this.lockedScrollY);
+      }
+      this.applyARViewportOffsetCompensation();
+      this.keyboardCorrectionFrameId = window.requestAnimationFrame(step);
+    };
+
+    this.keyboardCorrectionFrameId = window.requestAnimationFrame(step);
+  }
+
+  private stopKeyboardCorrectionLoop(): void {
+    if (this.keyboardCorrectionFrameId !== null) {
+      window.cancelAnimationFrame(this.keyboardCorrectionFrameId);
+      this.keyboardCorrectionFrameId = null;
+    }
+    this.clearARViewportOffsetCompensation();
+  }
+
+  private applyARViewportOffsetCompensation(): void {
+    const viewport = window.visualViewport;
+    const offsetTop = viewport?.offsetTop ?? 0;
+    const offsetLeft = viewport?.offsetLeft ?? 0;
+    const offsetX = -offsetLeft;
+    const offsetY = -offsetTop;
+
+    if (this.lastAppliedOffsetX === offsetX && this.lastAppliedOffsetY === offsetY) {
+      return;
+    }
+
+    this.lastAppliedOffsetX = offsetX;
+    this.lastAppliedOffsetY = offsetY;
+    document.documentElement.style.setProperty('--ar-vv-offset-x', `${offsetX}px`);
+    document.documentElement.style.setProperty('--ar-vv-offset-y', `${offsetY}px`);
+  }
+
+  private clearARViewportOffsetCompensation(): void {
+    this.lastAppliedOffsetX = null;
+    this.lastAppliedOffsetY = null;
+    document.documentElement.style.setProperty('--ar-vv-offset-x', '0px');
+    document.documentElement.style.setProperty('--ar-vv-offset-y', '0px');
   }
 
   /**
