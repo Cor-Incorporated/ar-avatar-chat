@@ -36,12 +36,16 @@ AFRAME.registerComponent('vrm-loader', {
       gltf.scene.position.set(0, 0, 0);
       gltf.scene.scale.set(1.0, 1.0, 1.0);
 
-      // VRMの原点は足元や腰ではなくモデルごとにずれるため、外接ボックス中心をマーカー原点に合わせる。
-      // AR.jsのマーカー面からモデル全体が画面外へ逃げる問題を防ぐ。
+      // VRMの原点はモデルごとにずれるため、x/zはbbox中心、yは足元(box.min.y)をマーカー原点に合わせる。
+      // 胴体中心合わせだと足元がマーカー面下に沈むため、足元アンカーで接地させる。
       const box = new THREE.Box3().setFromObject(gltf.scene);
       const center = box.getCenter(new THREE.Vector3());
-      if (Number.isFinite(center.x) && Number.isFinite(center.y) && Number.isFinite(center.z)) {
-        gltf.scene.position.sub(center);
+      if (Number.isFinite(center.x) && Number.isFinite(center.z)) {
+        gltf.scene.position.x -= center.x;
+        gltf.scene.position.z -= center.z;
+      }
+      if (Number.isFinite(box.min.y)) {
+        gltf.scene.position.y -= box.min.y;
       }
 
       // VRMオブジェクトを保存（後でアニメーションで使用）
