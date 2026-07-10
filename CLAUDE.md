@@ -105,13 +105,13 @@ Custom A-Frame components are ES6 modules using import maps:
 - Desktop browser testing complete
 - Ready for HTTPS deployment and mobile testing
 
-**Phase 2 ✅ (Completed - 2025-10-02)**: LLM chat integration with Gemini 2.5 Flash + Google Calendar
+**Phase 2 ✅ (Completed - 2025-10-02)**: LLM chat integration with Gemini 3.1 Flash-Lite + Google Calendar
 - **Day 1 (2025-10-01)**: Proxy server + OAuth handler implementation complete
 - **Day 2 Morning (2025-10-02)**: Function Calling + 博多弁tone implementation complete
 - **Day 2 Afternoon (2025-10-02)**: クライアント統合完了（チャットUI + アニメーション制御）
 - **Day 2 Evening (2025-10-02)**: 統合テスト成功 + リファクタリング完了 ✅
 - Technical achievements:
-  - Gemini 2.5 Flash + Structured Output方式実装（Function Callingと併用不可の制限を回避）
+  - Gemini 3.1 Flash-Lite + Structured Output方式実装（tools + responseSchema 併用）
   - 博多弁キャラクター + 感情検出（7種類: neutral/happy/angry/sad/relaxed/surprised/thinking）
   - VRMアニメーション自動切り替え（感情連動）
   - VRM表情制御（@pixiv/three-vrm expressionManager）
