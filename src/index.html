@@ -121,7 +121,7 @@
       margin: 0 !important;
       background: transparent !important;
       overflow: hidden !important;
-      transform: translate(var(--ar-vv-offset-x, 0px), var(--ar-vv-offset-y, 0px)) !important;
+      /* transformは#arjs-video/.a-canvasのみ。親にも付けるとcanvasが二重移動する */
       z-index: 1;
     }
     #arjs-video,
@@ -538,23 +538,47 @@
 
       function setAvatarOpacity(opacity) {
         if (!avatarEl?.object3D) return;
+        const fading = opacity < 1;
         avatarEl.object3D.traverse((child) => {
           if (!child.isMesh) return;
           const materials = Array.isArray(child.material) ? child.material : [child.material];
           materials.forEach((material) => {
             if (!material) return;
-            if (material.userData.__origTransparent === undefined) {
-              material.userData.__origTransparent = material.transparent;
+            if (material.userData.__graceOpacityCache === undefined) {
+              material.userData.__graceOpacityCache = {
+                transparent: material.transparent,
+                opacity: material.opacity,
+              };
             }
-            material.transparent = opacity < 1 ? true : material.userData.__origTransparent;
-            material.opacity = opacity;
-            material.needsUpdate = true;
+            const cache = material.userData.__graceOpacityCache;
+            const nextTransparent = fading ? true : cache.transparent;
+            // transparent切替時のみneedsUpdate（毎フレーム設定するとGPU負荷が増える）
+            if (material.transparent !== nextTransparent) {
+              material.transparent = nextTransparent;
+              material.needsUpdate = true;
+            }
+            material.opacity = fading ? opacity : cache.opacity;
           });
         });
       }
 
       function restoreAvatarOpacity() {
-        setAvatarOpacity(1);
+        if (!avatarEl?.object3D) return;
+        avatarEl.object3D.traverse((child) => {
+          if (!child.isMesh) return;
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((material) => {
+            if (!material) return;
+            const cache = material.userData.__graceOpacityCache;
+            if (!cache) return;
+            if (material.transparent !== cache.transparent) {
+              material.transparent = cache.transparent;
+              material.needsUpdate = true;
+            }
+            material.opacity = cache.opacity;
+            delete material.userData.__graceOpacityCache;
+          });
+        });
       }
 
       function cancelMarkerGraceTimers() {
@@ -646,6 +670,19 @@
         restoreAvatarToMarker();
       }
 
+      // A-FrameのtickはDOMイベントではないため、コンポーネントで毎フレームポーズを更新
+      if (!AFRAME.components['grace-pose-capturer']) {
+        AFRAME.registerComponent('grace-pose-capturer', {
+          tick() {
+            if (markerVisible && avatarReady) {
+              captureAvatarWorldPose();
+            }
+          }
+        });
+      }
+      if (!scene.hasAttribute('grace-pose-capturer')) {
+        scene.setAttribute('grace-pose-capturer', '');
+      }
 
       window.addEventListener('ar-marker-grace-keyboard-change', (event) => {
         if (!markerGraceActive || markerVisible) return;
