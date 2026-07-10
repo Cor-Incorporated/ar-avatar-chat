@@ -182,6 +182,10 @@
   >
     <a-entity camera></a-entity>
 
+    <!-- シーン直下ライト: markerLost猶予中もアバターが消灯しないようマーカー外に配置 -->
+    <a-light type="ambient" intensity="1.0"></a-light>
+    <a-light type="directional" intensity="0.8" position="1 2 1"></a-light>
+
     <!-- ペンギンロゴカスタムマーカー (モバイル最適化: 高解像度 + 低信頼度閾値) -->
     <a-marker 
       type="pattern" 
@@ -195,10 +199,6 @@
       smoothThreshold="2"
       minConfidence="0.35"
     >
-      <!-- ライト（モバイルGPU負荷低減のため最小限に） -->
-      <a-light type="ambient" intensity="1.0"></a-light>
-      <a-light type="directional" intensity="0.8" position="1 2 1"></a-light>
-
       <!-- VRMアバター -->
       <a-entity
         id="avatar"
@@ -531,7 +531,7 @@
       function captureAvatarWorldPose() {
         if (!avatarEl?.object3D) return;
         const THREE = AFRAME.THREE;
-        avatarEl.object3D.updateWorldMatrix(true, true);
+        avatarEl.object3D.updateWorldMatrix(true, false);
         if (!lastAvatarWorldMatrix) {
           lastAvatarWorldMatrix = new THREE.Matrix4();
         }
