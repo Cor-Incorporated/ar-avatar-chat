@@ -26,13 +26,22 @@ export interface ChatAttachment {
   size?: number;
 }
 
+
+/**
+ * API送受信用の会話履歴ターン（直近10往復）
+ */
+export interface ConversationHistoryItem {
+  role: 'user' | 'model';
+  content: string;
+}
+
 /**
  * チャットリクエスト
  */
 export interface ChatRequest {
   message?: string;
   oauthToken?: string;
-  conversationHistory?: ChatMessage[];
+  conversationHistory?: ConversationHistoryItem[];
   attachments?: ChatAttachment[];
 }
 

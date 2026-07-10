@@ -8,6 +8,7 @@ import type {
   BottomSheetConfig,
   ChatAttachment,
   ChatMessage,
+  ConversationHistoryItem,
   MessageSendPayload,
 } from '../types/chat.types.js';
 
@@ -20,6 +21,7 @@ export class BottomSheet {
   private inputElement: HTMLInputElement | null = null;
   private fileInputElement: HTMLInputElement | null = null;
   private attachButton: HTMLButtonElement | null = null;
+  private cameraButton: HTMLButtonElement | null = null;
   private sendButton: HTMLButtonElement | null = null;
 
   private state: BottomSheetState = 'collapsed';
@@ -32,6 +34,9 @@ export class BottomSheet {
   private stableViewportWidth: number = window.innerWidth;
   private stableViewportHeight: number = window.innerHeight;
   private blurReleaseTimer: number | null = null;
+  private keyboardCorrectionFrameId: number | null = null;
+  private lastAppliedOffsetX: number | null = null;
+  private lastAppliedOffsetY: number | null = null;
 
   private config: BottomSheetConfig = {
     collapsedHeight: 120,
@@ -66,9 +71,12 @@ export class BottomSheet {
             id="bottom-sheet-file"
             class="bottom-sheet-file"
             accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
-            aria-label="画像を添付"
+            aria-label="ギャラリーから画像を選択"
           />
-          <button id="bottom-sheet-attach" class="bottom-sheet-attach" title="画像を添付" aria-label="画像を添付">+</button>
+          <div class="attachment-actions" role="group" aria-label="画像添付">
+            <button id="bottom-sheet-attach" class="bottom-sheet-attach" type="button" title="ギャラリーから画像を添付" aria-label="ギャラリーから画像を添付">🖼</button>
+            <button id="bottom-sheet-camera" class="bottom-sheet-camera" type="button" title="カメラ映像をキャプチャ" aria-label="カメラ映像をキャプチャ">📷</button>
+          </div>
           <input
             type="text"
             id="bottom-sheet-input"
@@ -90,6 +98,7 @@ export class BottomSheet {
     this.inputElement = document.getElementById('bottom-sheet-input') as HTMLInputElement;
     this.fileInputElement = document.getElementById('bottom-sheet-file') as HTMLInputElement;
     this.attachButton = document.getElementById('bottom-sheet-attach') as HTMLButtonElement;
+    this.cameraButton = document.getElementById('bottom-sheet-camera') as HTMLButtonElement;
     this.sendButton = document.getElementById('bottom-sheet-send') as HTMLButtonElement;
 
     // 初期状態を設定
@@ -100,7 +109,7 @@ export class BottomSheet {
    * イベントリスナーを設定
    */
   private attachEventListeners(): void {
-    if (!this.dragHandle || !this.inputElement || !this.fileInputElement || !this.attachButton || !this.sendButton) {
+    if (!this.dragHandle || !this.inputElement || !this.fileInputElement || !this.attachButton || !this.cameraButton || !this.sendButton) {
       console.error('[BottomSheet] Required elements not found');
       return;
     }
@@ -116,8 +125,11 @@ export class BottomSheet {
     // 送信ボタン
     this.sendButton.addEventListener('click', this.handleSend.bind(this));
 
-    // 画像添付
+    // 画像添付（ギャラリー / カメラキャプチャ）
     this.attachButton.addEventListener('click', () => this.fileInputElement?.click());
+    this.cameraButton.addEventListener('click', () => {
+      void this.handleCameraCapture();
+    });
     this.fileInputElement.addEventListener('change', this.handleFileSelection.bind(this));
 
     // Enterキーで送信
@@ -176,8 +188,6 @@ export class BottomSheet {
 
     if (!this.keyboardOverlayActive && keyboardOffset === 0) {
       this.captureStableViewport();
-    } else if (this.keyboardOverlayActive) {
-      this.restoreLockedScroll();
     }
   };
 
@@ -230,12 +240,13 @@ export class BottomSheet {
     document.body.style.setProperty('--locked-scroll-y', `${this.lockedScrollY}px`);
 
     window.dispatchEvent(new CustomEvent('ar-keyboard-overlay-change', { detail: { active: true } }));
-    this.restoreLockedScroll();
+    this.startKeyboardCorrectionLoop();
   }
 
   private deactivateKeyboardOverlay(): void {
     if (!this.keyboardOverlayActive) return;
 
+    this.stopKeyboardCorrectionLoop();
     this.keyboardOverlayActive = false;
     document.documentElement.classList.remove('keyboard-overlay-active');
     document.body.classList.remove('keyboard-overlay-active');
@@ -247,13 +258,59 @@ export class BottomSheet {
     window.scrollTo(0, this.lockedScrollY);
   }
 
-  private restoreLockedScroll(): void {
-    if (!this.keyboardOverlayActive) return;
+  /**
+   * iOS Safariの連続ビューポート変化に追従するため、キーボード表示中はrAFで補正を維持する。
+   */
+  private startKeyboardCorrectionLoop(): void {
+    if (this.keyboardCorrectionFrameId !== null) return;
 
-    window.requestAnimationFrame(() => {
-      if (!this.keyboardOverlayActive) return;
-      window.scrollTo(0, this.lockedScrollY);
-    });
+    const step = (): void => {
+      if (!this.keyboardOverlayActive) {
+        this.keyboardCorrectionFrameId = null;
+        this.clearARViewportOffsetCompensation();
+        return;
+      }
+
+      if ((window.scrollY || document.documentElement.scrollTop || 0) !== this.lockedScrollY) {
+        window.scrollTo(0, this.lockedScrollY);
+      }
+      this.applyARViewportOffsetCompensation();
+      this.keyboardCorrectionFrameId = window.requestAnimationFrame(step);
+    };
+
+    this.keyboardCorrectionFrameId = window.requestAnimationFrame(step);
+  }
+
+  private stopKeyboardCorrectionLoop(): void {
+    if (this.keyboardCorrectionFrameId !== null) {
+      window.cancelAnimationFrame(this.keyboardCorrectionFrameId);
+      this.keyboardCorrectionFrameId = null;
+    }
+    this.clearARViewportOffsetCompensation();
+  }
+
+  private applyARViewportOffsetCompensation(): void {
+    const viewport = window.visualViewport;
+    const offsetTop = viewport?.offsetTop ?? 0;
+    const offsetLeft = viewport?.offsetLeft ?? 0;
+    const offsetX = -offsetLeft;
+    const offsetY = -offsetTop;
+
+    if (this.lastAppliedOffsetX === offsetX && this.lastAppliedOffsetY === offsetY) {
+      return;
+    }
+
+    this.lastAppliedOffsetX = offsetX;
+    this.lastAppliedOffsetY = offsetY;
+    document.documentElement.style.setProperty('--ar-vv-offset-x', `${offsetX}px`);
+    document.documentElement.style.setProperty('--ar-vv-offset-y', `${offsetY}px`);
+  }
+
+  private clearARViewportOffsetCompensation(): void {
+    this.lastAppliedOffsetX = null;
+    this.lastAppliedOffsetY = null;
+    document.documentElement.style.setProperty('--ar-vv-offset-x', '0px');
+    document.documentElement.style.setProperty('--ar-vv-offset-y', '0px');
   }
 
   /**
@@ -264,6 +321,61 @@ export class BottomSheet {
 
     this.container.classList.remove('state-collapsed', 'state-peek', 'state-expanded');
     this.container.classList.add(`state-${this.state}`);
+  }
+
+
+  /**
+   * ARカメラ（#arjs-video）の現在フレームをJPEG化し、既存attachments経路へ載せる
+   */
+  private async handleCameraCapture(): Promise<void> {
+    try {
+      const file = this.captureArVideoFrame();
+      this.pendingAttachment = await this.optimizeImage(file);
+      this.renderAttachmentPreview(file.name);
+    } catch (error) {
+      console.error('[BottomSheet] カメラキャプチャに失敗:', error);
+      this.showAttachmentError('カメラ映像の取得に失敗しました。');
+      this.pendingAttachment = null;
+    } finally {
+      this.syncViewportMetrics();
+    }
+  }
+
+  /**
+   * #arjs-video の現在フレームを canvas → JPEG File に変換する
+   */
+  private captureArVideoFrame(): File {
+    const video = document.querySelector('#arjs-video') as HTMLVideoElement | null;
+    if (!video || video.readyState < 2 || video.videoWidth <= 0 || video.videoHeight <= 0) {
+      throw new Error('AR camera video is not ready');
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Canvas context is not available');
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const commaIndex = dataUrl.indexOf(',');
+    if (commaIndex < 0) {
+      throw new Error('Failed to encode camera frame');
+    }
+
+    const base64 = dataUrl.slice(commaIndex + 1);
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return new File([bytes], `ar-camera-${stamp}.jpg`, { type: 'image/jpeg' });
   }
 
   /**
@@ -565,6 +677,9 @@ export class BottomSheet {
     const text = this.inputElement.value.trim() || (attachments ? 'この画像について説明して' : '');
     if (!text) return;
 
+    // 送信前の直近10往復（最大20メッセージ）を履歴として付与
+    const conversationHistory = this.getConversationHistory(10);
+
     // ユーザーメッセージを追加
     this.addMessage('user', attachments ? `${text}（画像付き）` : text);
     this.inputElement.value = '';
@@ -572,8 +687,21 @@ export class BottomSheet {
 
     // コールバックを実行
     if (this.onSendMessage) {
-      this.onSendMessage({ message: text, attachments });
+      this.onSendMessage({ message: text, attachments, conversationHistory });
     }
+  }
+
+  /**
+   * 直近 N 往復分の会話履歴を Gemini role (user/model) 形式で返す
+   */
+  private getConversationHistory(maxTurns: number): ConversationHistoryItem[] {
+    const maxMessages = maxTurns * 2;
+    return this.messages
+      .slice(-maxMessages)
+      .map((message) => ({
+        role: (message.role === 'assistant' ? 'model' : 'user') as 'user' | 'model',
+        content: message.content,
+      }));
   }
 
   /**

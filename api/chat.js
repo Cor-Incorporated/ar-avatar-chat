@@ -25,6 +25,7 @@ export default async function handler(req, res) {
   try {
     console.log('[API] リクエスト受信:', req.method, req.url);
     console.log('[API] 添付数:', Array.isArray(req.body?.attachments) ? req.body.attachments.length : 0);
+    console.log('[API] 履歴ターン数:', Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory.length : 0);
     
     // 動的インポート（Vercel環境用）
     let handleFunctionCalling;
@@ -43,7 +44,7 @@ export default async function handler(req, res) {
       return;
     }
     
-    const { message, oauthToken, attachments } = req.body;
+    const { message, oauthToken, attachments, conversationHistory } = req.body;
     const normalizedMessage = typeof message === 'string' ? message.trim() : '';
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
@@ -68,7 +69,8 @@ export default async function handler(req, res) {
       process.env.GEMINI_API_KEY,
       normalizedMessage,
       oauthToken || null,
-      attachments || []
+      attachments || [],
+      conversationHistory || []
     );
 
     console.log('[API] Gemini応答:', result);
