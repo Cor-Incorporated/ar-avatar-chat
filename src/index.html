@@ -180,7 +180,7 @@
 
   <a-scene
     embedded
-    arjs="sourceType: webcam; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
+    arjs="sourceType: webcam; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960; trackingMethod: best; detectionMode: mono; patternRatio: 0.80; labelingMode: black_region; maxDetectionRate: 60; debugUIEnabled: false;"
     renderer="alpha: true; antialias: true; logarithmicDepthBuffer: true; precision: medium;"
     vr-mode-ui="enabled: false"
     id="ar-scene"
@@ -260,7 +260,6 @@
       const camera = getThreeCamera();
       const arSession = getARSession();
       const projection = camera?.projectionMatrix;
-      const layoutSize = getARLayoutSize();
 
       debugLog(`[AR-Diag:${label}]`, {
         window: { width: window.innerWidth, height: window.innerHeight },
@@ -272,7 +271,7 @@
               offsetLeft: window.visualViewport.offsetLeft
             }
           : null,
-        layout: layoutSize,
+        layout: getViewportSize(),
         videoIntrinsic: {
           width: video?.videoWidth || 0,
           height: video?.videoHeight || 0
@@ -311,6 +310,113 @@
       }
       arDiagnosticsTimer = window.setTimeout(() => logARDiagnostics(label), 100);
     }
+
+    function getViewportSize() {
+      return {
+        width: document.documentElement.clientWidth || window.innerWidth,
+        height: document.documentElement.clientHeight || window.innerHeight
+      };
+    }
+
+    function getCoverProjectionScale(videoWidth, videoHeight, displayWidth, displayHeight) {
+      if (videoWidth <= 0 || videoHeight <= 0 || displayWidth <= 0 || displayHeight <= 0) {
+        return { scaleX: 1, scaleY: 1 };
+      }
+
+      const videoAspect = videoWidth / videoHeight;
+      const displayAspect = displayWidth / displayHeight;
+      if (displayAspect > videoAspect) {
+        return { scaleX: 1, scaleY: videoAspect / displayAspect };
+      }
+      return { scaleX: displayAspect / videoAspect, scaleY: 1 };
+    }
+
+    function applyProjectionCoverCorrection() {
+      const camera = getThreeCamera();
+      const video = getCameraVideo();
+      const arSession = getARSession();
+      if (!camera?.projectionMatrix || !video || !arSession?.arController) return;
+      if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
+
+      const layoutSize = getViewportSize();
+      camera.projectionMatrix.fromArray(arSession.arController.getCameraMatrix());
+      const { scaleX, scaleY } = getCoverProjectionScale(
+        video.videoWidth,
+        video.videoHeight,
+        layoutSize.width,
+        layoutSize.height
+      );
+      camera.projectionMatrix.elements[0] *= scaleX;
+      camera.projectionMatrix.elements[5] *= scaleY;
+      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    }
+
+    let arViewportResizeTimer = null;
+
+    // ADR-001: AR.js リサイズ経路 + cover クロップに合わせた投影行列補正
+    function syncARViewport(reason = 'sync') {
+      const arSession = getARSession();
+      const video = getCameraVideo();
+      const canvas = scene?.renderer?.domElement || document.querySelector('.a-canvas');
+      const arScene = document.querySelector('#ar-scene');
+
+      if (arSession?.arSource) {
+        arSession.arSource.onResizeElement();
+        if (canvas) {
+          arSession.arSource.copyElementSizeTo(canvas);
+        }
+        if (arSession.arController?.canvas) {
+          arSession.arSource.copyElementSizeTo(arSession.arController.canvas);
+        }
+      } else if (arSession && typeof arSession.onResize === 'function') {
+        arSession.onResize();
+      }
+
+      const layoutSize = getViewportSize();
+      if (scene?.renderer) {
+        scene.renderer.setSize(
+          Math.max(1, Math.round(layoutSize.width)),
+          Math.max(1, Math.round(layoutSize.height)),
+          false
+        );
+      }
+
+      if (video) {
+        video.style.position = 'fixed';
+        video.style.top = '0';
+        video.style.left = '0';
+        video.style.zIndex = '0';
+        video.style.background = 'transparent';
+      }
+
+      if (canvas) {
+        canvas.style.position = 'fixed';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.zIndex = '1';
+        canvas.style.background = 'transparent';
+      }
+
+      if (arScene) {
+        arScene.style.position = 'fixed';
+        arScene.style.inset = '0';
+        arScene.style.margin = '0';
+        arScene.style.zIndex = '1';
+        arScene.style.background = 'transparent';
+        arScene.style.overflow = 'hidden';
+      }
+
+      applyProjectionCoverCorrection();
+      scheduleARDiagnostics(reason);
+    }
+
+    function scheduleARViewportSync(reason) {
+      if (arViewportResizeTimer) {
+        window.clearTimeout(arViewportResizeTimer);
+      }
+      arViewportResizeTimer = window.setTimeout(() => syncARViewport(reason), 0);
+    }
+
 
     function cloneRect(rect) {
       return {
@@ -500,6 +606,7 @@
       scheduleARDiagnostics('syncARLayers');
     }
 
+
     function getCameraVideo() {
       return document.querySelector('#arjs-video');
     }
@@ -517,7 +624,7 @@
         return false;
       }
 
-      syncARLayers();
+      syncARViewport('camera-status');
 
       const hasFrame = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
         && video.videoWidth > 0
@@ -534,10 +641,10 @@
       const tick = () => {
         if (waitId !== cameraReadyWaitId || cameraErrorMessage) return;
         if (updateCameraStatus()) {
-          syncARLayers();
-          window.requestAnimationFrame(syncARLayers);
-          window.setTimeout(syncARLayers, 250);
-          window.setTimeout(syncARLayers, 1000);
+          syncARViewport('camera-ready');
+          window.requestAnimationFrame(() => syncARViewport('camera-ready-raf'));
+          window.setTimeout(() => syncARViewport('camera-ready-delay'), 250);
+          window.setTimeout(() => syncARViewport('camera-ready-settle'), 1000);
           return;
         }
 
@@ -554,13 +661,13 @@
     }
 
     window.addEventListener('arjs-video-loaded', () => {
-      syncARLayers();
+      scheduleARViewportSync('arjs-video-loaded');
       waitForCameraReady();
     });
     window.addEventListener('camera-init', () => {
       cameraErrorMessage = '';
       statusEl.textContent = '📷 カメラ起動中...';
-      window.setTimeout(syncARLayers, 0);
+      scheduleARViewportSync('camera-init');
     });
     window.addEventListener('camera-error', (event) => {
       cameraReadyWaitId++;
@@ -568,19 +675,22 @@
       statusEl.textContent = cameraErrorMessage;
       errorLog('[Camera] camera-error', event.error || event);
     });
-    window.addEventListener('resize', () => window.setTimeout(syncARLayers, 0));
-    window.visualViewport?.addEventListener('resize', () => window.setTimeout(syncARLayers, 0));
-    window.visualViewport?.addEventListener('scroll', () => window.setTimeout(syncARLayers, 0));
+    window.addEventListener('resize', () => scheduleARViewportSync('resize'));
+    window.addEventListener('orientationchange', () => scheduleARViewportSync('orientationchange'));
+    window.visualViewport?.addEventListener('resize', () => scheduleARViewportSync('visual-viewport-resize'));
+    window.visualViewport?.addEventListener('scroll', () => scheduleARViewportSync('visual-viewport-scroll'));
     window.addEventListener('ar-keyboard-overlay-change', () => {
-      syncARLayers();
-      window.requestAnimationFrame(syncARLayers);
-      window.setTimeout(syncARLayers, 250);
+      scheduleARViewportSync('keyboard-overlay-change');
+      window.requestAnimationFrame(() => scheduleARViewportSync('keyboard-overlay-change-raf'));
+      window.setTimeout(() => scheduleARViewportSync('keyboard-overlay-change-delay'), 250);
     });
     window.setInterval(() => {
       if (document.visibilityState === 'visible') {
-        syncARLayers();
+        syncARViewport('interval-poll');
       }
     }, 500);
+
+    scene.addEventListener('renderstart', applyProjectionCoverCorrection);
 
     // デバッグモード通知とStats有効化
     if (DEBUG_MODE) {
@@ -654,7 +764,7 @@
       // マーカー検出イベント（連続Lost検出追加 + 詳細ログ）
       marker.addEventListener('markerFound', (event) => {
         const now = new Date().toLocaleTimeString();
-        syncARLayers();
+        scheduleARViewportSync('marker-found');
         
         // minConfidenceを初期値に戻す（検出成功時）
         const currentConfidence = marker.getAttribute('minConfidence');
