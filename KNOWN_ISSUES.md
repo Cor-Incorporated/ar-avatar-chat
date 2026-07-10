@@ -1,5 +1,33 @@
 # 既知の課題（Known Issues）
 
+## 🚨 優先度: 最高（Phase 8 対応中）
+
+### モバイルARでマーカー相対位置ズレ・モデルの縦横比歪み
+
+**発生日**: 2026-07-10 起票
+**ステータス**: 対応中 — [Issue #36](https://github.com/Cor-Incorporated/ar-avatar-chat/issues/36)
+
+- アバターがマーカー直上の期待位置に出ない（横ズレ・下半身沈み込み）、モデルが極端に細く歪む
+- 根本原因分析と修正方針: `docs/adr/001-ar-viewport-projection-and-chat-overlay.md`（投影行列とビューポートの不整合、bbox中心アンカー）
+- 過去の対症療法（PR #15〜#31）の総括もADR参照
+
+### チャット入力中にAR画面が押し上げられ／アバターが消失
+
+**発生日**: 2026-07-10 起票
+**ステータス**: 対応中 — [Issue #37](https://github.com/Cor-Incorporated/ar-avatar-chat/issues/37)
+
+- ソフトキーボード表示でAR画面が押し上げられアバターの挙動が見えない
+- markerLost で即座にアバターが消え、会話中の感情モーションが視認できない
+- 修正方針（継続visualViewport補正＋markerLost猶予）: ADR-001 / 実装指示: `docs/28_Phase8開発指示書_AR安定化とGemini3.1.md`
+
+### 関連バックログ
+
+- [Issue #38](https://github.com/Cor-Incorporated/ar-avatar-chat/issues/38): Gemini 3.1 Flash-Lite GA化・単一呼び出し・会話履歴・カメラキャプチャ・添付UX可視化
+- [Issue #39](https://github.com/Cor-Incorporated/ar-avatar-chat/issues/39): MindAR移行調査 spike（下記「マーカー検出精度の制限」の中期対策）
+- [Issue #40](https://github.com/Cor-Incorporated/ar-avatar-chat/issues/40): 音声会話フェーズ1（TTS読み上げ）
+
+---
+
 ## 🚨 優先度: 高
 
 ### モバイル縦向きでのマーカー検出精度の制限
@@ -149,5 +177,5 @@ console.log('duration:', action?._clip?.duration);
 ---
 
 **作成日**: 2025-10-05  
-**最終更新**: 2025-10-05（Phase 5: モバイル精度問題を追加）
+**最終更新**: 2026-07-10（Phase 8: AR表示・チャット安定性のクリティカル課題を追加、Issue #36〜#40 起票）
 
