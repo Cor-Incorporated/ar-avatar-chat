@@ -22,9 +22,11 @@
         height: var(--ar-layout-height, 100vh) !important;
         margin: 0 !important;
       }
-      #ar-stage { z-index: 0; overflow: hidden; }
+      /* ARToolkitSource appends video after the existing stage. The stage must
+         own a higher stacking context or its child canvas stays behind video. */
+      #ar-stage { z-index: 1; overflow: hidden; pointer-events: none; }
       #arjs-video { z-index: 0 !important; object-fit: cover !important; }
-      #ar-canvas { z-index: 1; background: transparent; }
+      #ar-canvas { z-index: 0; background: transparent; }
       #info {
         position: fixed;
         top: max(10px, env(safe-area-inset-top));
