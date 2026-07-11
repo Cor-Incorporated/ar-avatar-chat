@@ -35,6 +35,7 @@ export class AvatarController extends EventTarget {
   private actions = new Map<AvatarEmotion, AnimationAction>();
   private currentAction: AnimationAction | null = null;
   private currentEmotion: AvatarEmotion = 'neutral';
+  private finishedListener: ((event: { action: AnimationAction }) => void) | null = null;
   private disposed = false;
 
   async load(): Promise<void> {
@@ -118,6 +119,7 @@ export class AvatarController extends EventTarget {
       if (emotion !== 'neutral') this.ensureIdle();
       return;
     }
+    this.clearFinishedListener();
     if (emotion === 'neutral' && action === this.currentAction && action.isRunning()) return;
     this.currentAction?.fadeOut(0.35);
     action.reset().fadeIn(0.35).play();
@@ -125,13 +127,19 @@ export class AvatarController extends EventTarget {
     this.currentEmotion = emotion;
     if (emotion !== 'neutral' && this.mixer) {
       const expectedAction = action;
-      const onFinished = (event: { action: AnimationAction }) => {
+      this.finishedListener = (event: { action: AnimationAction }) => {
         if (event.action !== expectedAction) return;
-        this.mixer?.removeEventListener('finished', onFinished);
+        this.clearFinishedListener();
         if (this.currentAction === expectedAction) this.playEmotion('neutral');
       };
-      this.mixer.addEventListener('finished', onFinished);
+      this.mixer.addEventListener('finished', this.finishedListener);
     }
+  }
+
+  private clearFinishedListener(): void {
+    if (!this.finishedListener) return;
+    this.mixer?.removeEventListener('finished', this.finishedListener);
+    this.finishedListener = null;
   }
 
   ensureIdle(): void {
@@ -149,6 +157,7 @@ export class AvatarController extends EventTarget {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.clearFinishedListener();
     this.mixer?.stopAllAction();
     if (this.vrm) VRMUtils.deepDispose(this.vrm.scene);
     this.root.clear();
