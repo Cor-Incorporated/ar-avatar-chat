@@ -52,7 +52,7 @@ export interface ChatResponse {
   message: string;
   emotion: EmotionType;
   timestamp: Date;
-  action?: { type: 'retry'; reason: string };
+  action?: { type: 'retry'; reason: 'calendar_unavailable'; retryable: boolean };
   calendar?: { queriedRange: { start: string; end: string; timezone: string }; publicEventCount: number; availabilityProvided: boolean };
   functionCalled?: {
     name: string;
@@ -100,7 +100,7 @@ export interface CalendarSearchResponse {
 export interface GeminiResponse {
   text: string;
   emotion: EmotionType;
-  action?: { type: 'retry'; reason: string };
+  action?: { type: 'retry'; reason: 'calendar_unavailable'; retryable: boolean };
   calendar?: { queriedRange: { start: string; end: string; timezone: string }; publicEventCount: number; availabilityProvided: boolean };
   functionCall?: {
     name: string;

@@ -43,6 +43,7 @@ export interface ChatAPIResponse {
   message: string;
   emotion: EmotionType;
   timestamp: string;
+  action?: { type: 'retry'; reason: 'calendar_unavailable'; retryable: boolean };
 }
 
 /**

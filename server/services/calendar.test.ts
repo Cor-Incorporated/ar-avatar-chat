@@ -3,6 +3,7 @@ import { isCalendarIntent, normalizeCalendarQuery } from './calendar-intent.serv
 import { calculatePublicAvailability, calendarCacheKey, collectCalendarEvents, extractPublicDescription, loadCalendarEnvironment, sanitizePublicEvent } from './google-calendar.service.js';
 import { CalendarProviderError } from '../types/calendar.types.js';
 import { allowChatRequest, normalizeClientIp } from './rate-limit.service.js';
+import { toPublicCalendarAction } from './gemini.service.js';
 
 describe('calendar intent', () => {
   it.each(['こんにちは', 'おはようございます！', '会社を紹介して'])('does not route ordinary chat: %s', (message) => expect(isCalendarIntent(message)).toBe(false));
@@ -97,6 +98,22 @@ describe('public boundary', () => {
 });
 
 describe('server safeguards', () => {
+  it.each([
+    ['calendar_not_configured', false],
+    ['calendar_unauthorized', false],
+    ['invalid_calendar_range', false],
+    ['calendar_rate_limited', true],
+    ['calendar_unavailable', true],
+  ] as const)('maps internal %s errors to a coarse public action', (code, retryable) => {
+    expect(toPublicCalendarAction(new CalendarProviderError(code, 'internal detail', retryable))).toEqual({
+      type: 'retry', reason: 'calendar_unavailable', retryable,
+    });
+  });
+  it('treats unknown failures as transient without exposing details', () => {
+    expect(toPublicCalendarAction(new Error('secret'))).toEqual({
+      type: 'retry', reason: 'calendar_unavailable', retryable: true,
+    });
+  });
   it('requires all service account settings without leaking values', () => {
     expect(() => loadCalendarEnvironment({})).toThrowError(CalendarProviderError);
   });
