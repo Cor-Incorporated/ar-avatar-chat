@@ -1,6 +1,5 @@
 import { google } from '@ai-sdk/google';
-import { generateText, Output, tool } from 'ai';
-import { z } from 'zod';
+import { generateText, jsonSchema, Output, stepCountIs, tool } from 'ai';
 import type { ChatAttachment, ConversationHistoryItem, GeminiResponse } from '../types/chat.types.js';
 import type { CalendarProvider, CalendarResult } from '../types/calendar.types.js';
 import { CalendarProviderError } from '../types/calendar.types.js';
@@ -8,8 +7,17 @@ import { isCalendarIntent, normalizeCalendarQuery } from './calendar-intent.serv
 import { GoogleServiceAccountCalendarProvider } from './google-calendar.service.js';
 
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
-const emotionSchema = z.enum(['neutral', 'happy', 'angry', 'sad', 'relaxed', 'surprised', 'thinking']);
-const responseSchema = z.object({ message: z.string(), emotion: emotionSchema });
+type StructuredResponse = Pick<GeminiResponse, 'emotion'> & { message: string };
+const responseSchema = jsonSchema<StructuredResponse>({
+  type: 'object',
+  properties: {
+    message: { type: 'string' },
+    emotion: { type: 'string', enum: ['neutral', 'happy', 'angry', 'sad', 'relaxed', 'surprised', 'thinking'] },
+  },
+  required: ['message', 'emotion'],
+  additionalProperties: false,
+});
+const emptyToolInput = jsonSchema<Record<string, never>>({ type: 'object', properties: {}, additionalProperties: false });
 
 const SYSTEM = `あなたはCor.Inc.のAIアンバサダー、クラウディアです。明るく丁寧な博多弁で答えてください。
 事実を推測で補わず、カレンダー情報が与えられた場合は、その公開情報だけに基づいて答えてください。
@@ -34,9 +42,9 @@ async function renderResponse(apiKey: string, prompt: string, attachments: ChatA
   const result = await generateText({
     model: google(MODEL_NAME), system: SYSTEM,
     messages: [...historyMessages(history), { role: 'user', content: userContent(prompt, attachments, calendar) }],
-    output: Output.object({ schema: responseSchema }), temperature: 0.5
+    experimental_output: Output.object({ schema: responseSchema }), temperature: 0.5
   });
-  return { text: result.output.message, emotion: result.output.emotion };
+  return { text: result.experimental_output.message, emotion: result.experimental_output.emotion };
 }
 
 export async function handleFunctionCalling(
@@ -52,12 +60,12 @@ export async function handleFunctionCalling(
     let calendarResult: CalendarResult | undefined;
     const calendarTool = tool({
       description: 'サーバーで設定されたカレンダーから公開予定と空き状況を取得する',
-      inputSchema: z.object({}),
+      inputSchema: emptyToolInput,
       execute: async () => calendarProvider.query(query)
     });
     process.env.GOOGLE_GENERATIVE_AI_API_KEY = apiKey;
     const execution = await generateText({
-      model: google(MODEL_NAME), prompt: userPrompt, tools: { getCalendar: calendarTool }, toolChoice: { type: 'tool', toolName: 'getCalendar' }, stopWhen: ({ steps }) => steps.length >= 1
+      model: google(MODEL_NAME), prompt: userPrompt, tools: { getCalendar: calendarTool }, toolChoice: { type: 'tool', toolName: 'getCalendar' }, stopWhen: stepCountIs(1)
     });
     calendarResult = execution.toolResults[0]?.output as CalendarResult | undefined;
     if (!calendarResult) calendarResult = await calendarProvider.query(query);
