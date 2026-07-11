@@ -22,9 +22,10 @@ describe('AR runtime math', () => {
   });
 
   it('keeps the last marker pose for 2.5s and indefinitely while typing', () => {
-    expect(shouldKeepAvatarVisible(false, 3500, 1000, false)).toBe(true);
-    expect(shouldKeepAvatarVisible(false, 3500, 3500, false)).toBe(false);
-    expect(shouldKeepAvatarVisible(false, 3500, 9000, true)).toBe(true);
+    expect(shouldKeepAvatarVisible(true, false, 3500, 1000, false)).toBe(true);
+    expect(shouldKeepAvatarVisible(true, false, 3500, 3500, false)).toBe(false);
+    expect(shouldKeepAvatarVisible(true, false, 3500, 9000, true)).toBe(true);
+    expect(shouldKeepAvatarVisible(false, false, 3500, 1000, true)).toBe(false);
   });
 
   it('centers X/Z and places the feet on the marker plane', () => {

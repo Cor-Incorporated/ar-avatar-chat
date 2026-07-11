@@ -23,8 +23,14 @@ export function coverProjectionScale(
     : { x: videoAspect / displayAspect, y: 1 };
 }
 
-export function shouldKeepAvatarVisible(markerVisible: boolean, graceUntil: number, now: number, keyboardActive: boolean): boolean {
-  return markerVisible || keyboardActive || now < graceUntil;
+export function shouldKeepAvatarVisible(
+  hasTrackedPose: boolean,
+  markerVisible: boolean,
+  graceUntil: number,
+  now: number,
+  keyboardActive: boolean,
+): boolean {
+  return hasTrackedPose && (markerVisible || keyboardActive || now < graceUntil);
 }
 
 export function setUniformScale(object: Object3D, scale: number): void {
