@@ -1,6 +1,7 @@
 import type { KnowledgeSource } from './types.js';
 
 export const KNOWLEDGE_SOURCES: readonly KnowledgeSource[] = [
+  { id: 'corsweb-ja-copy', title: 'Cor.Inc.公式サイト日本語コピー', repositoryPath: 'docs/corsweb-company-public-copy.md', sourceUpdatedAt: '2026-07-11', reviewedAt: '2026-07-11', lineHint: '会社概要・提供領域（corsweb日本語コピーから転記）' },
   { id: 'readme', title: 'ARアバターチャット README', repositoryPath: 'README.md', sourceUpdatedAt: '2026-07-11', reviewedAt: '2026-07-11', lineHint: 'プロジェクト概要・AI機能' },
   { id: 'project-summary', title: 'ARアバターチャット プロジェクトサマリー', repositoryPath: 'docs/00_プロジェクトサマリー.md', sourceUpdatedAt: '2025-10-01', reviewedAt: '2026-07-11', lineHint: 'ビジネス目標・ターゲットユーザー' },
   { id: 'knowledge-policy', title: 'AIアンバサダー公開知識ポリシー', repositoryPath: 'docs/knowledge-publication-policy.md', sourceUpdatedAt: '2026-07-11', reviewedAt: '2026-07-11', lineHint: '公開範囲・禁止情報' },

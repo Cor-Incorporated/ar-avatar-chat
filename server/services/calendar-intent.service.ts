@@ -1,7 +1,7 @@
 import type { CalendarQuery } from '../types/calendar.types.js';
 import { CalendarProviderError } from '../types/calendar.types.js';
 
-const CALENDAR_WORDS = /(?:カレンダー|予定|スケジュール|空き(?:時間)?|空いて|予約)/;
+const CALENDAR_WORDS = /(?:カレンダー|予定|公開イベント|スケジュール|空き(?:時間)?|空いて|予約)/;
 const MEETING_WORDS = /(?:会議|打ち合わせ)/;
 const MEETING_SCHEDULE_CONTEXT = /(?:予定|スケジュール|空き|時間|いつ|今日|明日|今週|来週)/;
 const REQUEST_CUE = /(?:教えて|確認して|確認したい|見せて|調べて|取得して|知りたい|空いて|空き時間|ありますか|ある[？?]|いつ(?:ですか|ある)|何時|[？?])/;

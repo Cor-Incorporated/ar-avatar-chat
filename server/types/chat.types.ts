@@ -1,4 +1,5 @@
 import { EmotionType } from './emotion.types.js';
+import type { IntentRoute } from '../services/intent-route.service.js';
 
 /**
  * チャットメッセージの役割
@@ -73,6 +74,7 @@ export interface TemporalFact {
   year: number;
   month: number;
   day: number;
+  weekday: string;
   hour: number;
   minute: number;
 }
@@ -119,6 +121,12 @@ export interface GeminiResponse {
   emotion: EmotionType;
   action?: { type: 'retry'; reason: 'calendar_unavailable'; retryable: boolean };
   calendar?: { queriedRange: { start: string; end: string; timezone: string }; publicEventCount: number; availabilityProvided: boolean };
+  /** サーバーログ用。クライアント契約には公開しない。 */
+  route?: IntentRoute;
+  /** サーバーログ用。クライアント契約には公開しない。 */
+  model?: string;
+  /** 公開知識の追跡用。APIレスポンス本文には公開しない。 */
+  knowledge?: { sourceIds: string[]; reviewedAt: string[] };
   functionCall?: {
     name: string;
     args: Record<string, unknown>;

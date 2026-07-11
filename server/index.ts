@@ -59,8 +59,10 @@ app.post('/api/chat', async (req: Request<{}, ChatResponse, ChatRequest>, res: R
       calendar: result.calendar
     });
 
-  } catch (error) {
-    console.error('[API] エラー:', error);
+  } catch {
+    // Upstream errors can contain user content. Keep standalone logs coarse,
+    // matching the Vercel boundary metadata policy.
+    console.error('[API]', { errorCode: 'upstream_failed' });
     res.status(500).json({
       error: 'サーバーエラーが発生しました',
       message: 'すみません、エラーが発生しました。',

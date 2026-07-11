@@ -27,18 +27,22 @@ function temporalParts(context: RequestContext): Omit<TemporalFact, 'kind'> {
   return {
     isoInstant: context.now.toISOString(), timezone: context.timezone,
     year: value('year'), month: value('month'), day: value('day'),
+    weekday: new Intl.DateTimeFormat(context.locale, {
+      timeZone: context.timezone,
+      weekday: 'long',
+    }).format(context.now),
     hour: value('hour'), minute: value('minute'),
   };
 }
 
 export function resolveTemporalFact(prompt: string, context: RequestContext): TemporalFact | null {
   const text = prompt.trim();
-  const suffix = String.raw`(?:ですか|でしょうか|だっけ)?[？?。！!\s]*$`;
+  const suffix = String.raw`(?:ですか|でしょうか|だっけ|か(?:知りたい|教えて(?:ほしい|ください)?|な))?[？?。！!\s]*$`;
   const kind = new RegExp(String.raw`^(?:(?:今|現在)(?:の)?(?:時刻|時間)|(?:今|いま)何時)${suffix}`).test(text)
     ? 'current_time'
     : new RegExp(String.raw`^(?:(?:今年|現在|今)(?:は|の)?何年|西暦何年)${suffix}`).test(text)
       ? 'current_year'
-      : new RegExp(String.raw`^(?:(?:今日|本日)(?:は|の)?(?:何日|日付)|今日はいつ)${suffix}`).test(text)
+      : new RegExp(String.raw`^(?:(?:今日|本日)(?:は|の)?(?:何日|何曜日|日付)|今日はいつ)${suffix}`).test(text)
         ? 'current_date'
         : null;
   return kind ? { kind, ...temporalParts(context) } : null;
@@ -49,10 +53,10 @@ export function temporalFactResponse(fact: TemporalFact): GeminiResponse {
     return { text: `今は${fact.year}年${fact.month}月${fact.day}日 ${String(fact.hour).padStart(2, '0')}:${String(fact.minute).padStart(2, '0')}（日本時間）ばい！`, emotion: 'neutral' };
   }
   if (fact.kind === 'current_year') return { text: `今年は${fact.year}年ばい！`, emotion: 'neutral' };
-  return { text: `今日は${fact.year}年${fact.month}月${fact.day}日ばい！`, emotion: 'neutral' };
+  return { text: `今日は${fact.year}年${fact.month}月${fact.day}日、${fact.weekday}ばい！`, emotion: 'neutral' };
 }
 
 export function buildCurrentTimeInstruction(context: RequestContext): string {
   const parts = temporalParts(context);
-  return `現在日時は${parts.year}年${parts.month}月${parts.day}日${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}（${context.timezone}）です。日時については会話履歴やモデル知識ではなく、この値だけを根拠にしてください。`;
+  return `現在日時は${parts.year}年${parts.month}月${parts.day}日、${parts.weekday}、${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}（${context.timezone}）です。日時と曜日については会話履歴やモデル知識ではなく、この値だけを根拠にしてください。`;
 }

@@ -15,18 +15,27 @@ describe('request context and temporal facts', () => {
   it('uses one immutable instant at the JST date boundary', () => {
     expect(context.now).not.toBe(instant);
     expect(context.now.toISOString()).toBe('2026-07-10T15:05:00.000Z');
-    expect(buildCurrentTimeInstruction(context)).toContain('2026年7月11日00:05');
+    expect(buildCurrentTimeInstruction(context)).toContain('2026年7月11日、土曜日、00:05');
   });
 
   it.each([
-    ['今日は何日？', 'current_date', '今日は2026年7月11日ばい！'],
+    ['今日は何日？', 'current_date', '今日は2026年7月11日、土曜日ばい！'],
+    ['今日は何曜日？', 'current_date', '土曜日'],
     ['今年は何年？', 'current_year', '今年は2026年ばい！'],
     ['今何時？', 'current_time', '2026年7月11日 00:05'],
+    ['今何時か知りたい', 'current_time', '2026年7月11日 00:05'],
   ])('answers %s without model knowledge', (prompt, kind, expected) => {
     const fact = resolveTemporalFact(prompt, context);
     expect(fact?.kind).toBe(kind);
     expect(temporalFactResponse(fact!)).toMatchObject({ emotion: 'neutral' });
     expect(temporalFactResponse(fact!).text).toContain(expected);
+  });
+
+  it('calculates leap-day weekday from the same JST instant', () => {
+    const leapContext = createRequestContext(new Date('2028-02-28T15:00:00.000Z'), 'Asia/Tokyo');
+    const fact = resolveTemporalFact('今日は何曜日？', leapContext);
+    expect(fact).toMatchObject({ year: 2028, month: 2, day: 29, weekday: '火曜日' });
+    expect(buildCurrentTimeInstruction(leapContext)).toContain('2028年2月29日、火曜日');
   });
 
   it('does not intercept unrelated conversation', () => {

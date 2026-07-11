@@ -5,9 +5,15 @@ const reviewedAt = '2026-07-11';
 export const COMPANY_KNOWLEDGE: readonly KnowledgeEntry[] = [
   {
     id: 'company.identity', category: 'company', title: 'Cor.Inc.について',
-    answer: 'Cor.Inc.は、名刺マーカー、3Dアバター、AI会話を組み合わせたAR技術デモを公開しています。',
-    aliases: ['会社について', 'Cor.Inc.とは', 'コアインクとは', 'どんな会社'],
-    keywords: ['Cor.Inc', '会社', 'AR', '技術デモ'], sourceIds: ['readme', 'project-summary'], visibility: 'public', reviewedAt,
+    answer: 'Cor.Inc.は福岡発のAI実装会社です。機密データを安全に扱うAI基盤、業務AIの受託開発・導入支援、機密データAI活用診断、Local LLM・セキュアAI／AI基盤PoC、AI見積支援ツール「Grift」を軸に、課題整理から設計・実装・運用まで伴走します。',
+    aliases: ['会社について', '会社を紹介して', '会社概要', '会社説明', 'Cor.Inc.とは', 'コアインクとは', 'どんな会社'],
+    keywords: ['Cor.Inc', '会社', '機密データAI', '業務AI', 'Local LLM', 'AI基盤', 'Grift'], sourceIds: ['corsweb-ja-copy'], visibility: 'public', reviewedAt,
+  },
+  {
+    id: 'company.ar-demo', category: 'company', title: 'AR技術デモ',
+    answer: '名刺マーカー、3Dアバター、AI会話を組み合わせたAR技術デモは、Cor.Inc.の技術実証の一つです。会社全体の事業定義ではありません。',
+    aliases: ['ARデモとは', 'このARデモについて'], keywords: ['AR', '名刺マーカー', '3Dアバター', '技術デモ'],
+    sourceIds: ['readme', 'project-summary'], visibility: 'public', reviewedAt,
   },
   {
     id: 'company.ambassador', category: 'company', title: 'AIアンバサダー クラウディア',
