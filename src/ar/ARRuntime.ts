@@ -51,6 +51,8 @@ export class ARRuntime extends EventTarget {
     this.scene.add(key);
     window.addEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
     window.visualViewport?.addEventListener('resize', this.verifyKeyboardArRects);
+    window.visualViewport?.addEventListener('resize', this.syncVisualViewportOffset);
+    window.visualViewport?.addEventListener('scroll', this.syncVisualViewportOffset);
   }
 
   async start(): Promise<void> {
@@ -92,6 +94,9 @@ export class ARRuntime extends EventTarget {
       throw new Error('AR.js camera source was disposed before becoming ready');
     }
     await this.waitForCameraFrame(source.domElement);
+    // Keep the camera and renderer in one transformed stacking context so an
+    // iOS visual-viewport pan cannot move them independently.
+    document.querySelector('#ar-stage')?.prepend(source.domElement);
     await this.initializeContext(context);
     if (this.disposed || this.context !== context || this.source !== source) {
       throw new Error('AR.js initialization was interrupted');
@@ -232,6 +237,7 @@ export class ARRuntime extends EventTarget {
     const wasActive = this.keyboardOverlayActive;
     this.keyboardOverlayActive = active;
     this.keyboardRectSnapshot = active ? this.captureArRects() : null;
+    this.syncVisualViewportOffset();
     if (wasActive && !active) {
       // Reconcile once after Safari has restored its layout viewport.
       requestAnimationFrame(() => {
@@ -240,11 +246,31 @@ export class ARRuntime extends EventTarget {
     }
   };
 
+  private syncVisualViewportOffset = (): void => {
+    const viewport = window.visualViewport;
+    const normalize = (value: number): number => Number.isFinite(value) && value > 0 ? value : 0;
+    const x = this.keyboardOverlayActive ? normalize(viewport?.offsetLeft ?? 0) : 0;
+    const y = this.keyboardOverlayActive ? normalize(viewport?.offsetTop ?? 0) : 0;
+    document.documentElement.style.setProperty('--ar-vv-offset-x', `${x}px`);
+    document.documentElement.style.setProperty('--ar-vv-offset-y', `${y}px`);
+  };
+
   private captureArRects(): RectSnapshot[] {
     const stage = document.getElementById('ar-stage');
     const video = this.source?.domElement;
     if (!stage || !video) return [];
-    return [stage, video, this.canvas].map((element) => element.getBoundingClientRect());
+    const viewport = window.visualViewport;
+    const offsetLeft = viewport?.offsetLeft ?? 0;
+    const offsetTop = viewport?.offsetTop ?? 0;
+    return [stage, video, this.canvas].map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left - offsetLeft,
+        top: rect.top - offsetTop,
+        width: rect.width,
+        height: rect.height,
+      };
+    });
   }
 
   private verifyKeyboardArRects = (): void => {
@@ -330,6 +356,8 @@ export class ARRuntime extends EventTarget {
     window.removeEventListener('orientationchange', this.handleViewportResize);
     window.removeEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
     window.visualViewport?.removeEventListener('resize', this.verifyKeyboardArRects);
+    window.visualViewport?.removeEventListener('resize', this.syncVisualViewportOffset);
+    window.visualViewport?.removeEventListener('scroll', this.syncVisualViewportOffset);
     this.markerControls?.dispose?.();
     this.source?.dispose();
     if (this.cameraParametersUrl) URL.revokeObjectURL(this.cameraParametersUrl);
@@ -337,5 +365,7 @@ export class ARRuntime extends EventTarget {
     this.renderer.dispose();
     document.documentElement.style.removeProperty('--ar-layout-width');
     document.documentElement.style.removeProperty('--ar-layout-height');
+    document.documentElement.style.removeProperty('--ar-vv-offset-x');
+    document.documentElement.style.removeProperty('--ar-vv-offset-y');
   }
 }
