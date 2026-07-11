@@ -23,20 +23,6 @@ export function coverProjectionScale(
     : { x: videoAspect / displayAspect, y: 1 };
 }
 
-export function shouldKeepAvatarVisible(
-  hasTrackedPose: boolean,
-  markerVisible: boolean,
-  graceUntil: number,
-  now: number,
-  keyboardActive: boolean,
-): boolean {
-  return hasTrackedPose && (markerVisible || keyboardActive || now < graceUntil);
-}
-
-export function isChatInputActive(activeElement: Pick<Element, 'id'> | null, explicitlyActive: boolean): boolean {
-  return explicitlyActive || activeElement?.id === 'bottom-sheet-input';
-}
-
 export function isCameraPermissionError(error: unknown): boolean {
   if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
     if (error.name === 'NotAllowedError' || error.name === 'SecurityError') return true;
@@ -49,6 +35,14 @@ export function setUniformScale(object: Object3D, scale: number): void {
     throw new RangeError('Avatar scale must be a positive finite number');
   }
   object.scale.setScalar(scale);
+}
+
+export function snapObjectTransform(target: Object3D, source: Object3D): void {
+  target.position.copy(source.position);
+  target.quaternion.copy(source.quaternion);
+  target.scale.copy(source.scale);
+  target.updateMatrix();
+  target.updateMatrixWorld(true);
 }
 
 export function anchorAvatarToFeet(object: Object3D): void {

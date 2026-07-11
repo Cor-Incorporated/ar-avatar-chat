@@ -1,6 +1,6 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, isChatInputActive, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldKeepAvatarVisible } from './runtimeMath.js';
+import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, MAX_FRAME_DELTA_SECONDS, setUniformScale, snapObjectTransform } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -16,22 +16,23 @@ describe('AR runtime math', () => {
     expect(() => setUniformScale(object, 0)).toThrow(RangeError);
   });
 
+  it('snaps a reacquired marker pose instead of interpolating through the camera origin', () => {
+    const marker = new Object3D();
+    marker.position.set(1, 2, -6);
+    marker.rotation.set(0.2, 0.4, 0.1);
+    marker.scale.setScalar(1.25);
+    const smoothed = new Object3D();
+
+    snapObjectTransform(smoothed, marker);
+
+    expect(smoothed.position.toArray()).toEqual(marker.position.toArray());
+    expect(smoothed.quaternion.toArray()).toEqual(marker.quaternion.toArray());
+    expect(smoothed.scale.toArray()).toEqual([1.25, 1.25, 1.25]);
+  });
+
   it('corrects camera projection for cover cropping without stretching', () => {
     expect(coverProjectionScale(1280, 960, 390, 844)).toEqual({ x: (4 / 3) / (390 / 844), y: 1 });
     expect(coverProjectionScale(1280, 960, 844, 390)).toEqual({ x: 1, y: (844 / 390) / (4 / 3) });
-  });
-
-  it('keeps the last marker pose for 2.5s and indefinitely while typing', () => {
-    expect(shouldKeepAvatarVisible(true, false, 3500, 1000, false)).toBe(true);
-    expect(shouldKeepAvatarVisible(true, false, 3500, 3500, false)).toBe(false);
-    expect(shouldKeepAvatarVisible(true, false, 3500, 9000, true)).toBe(true);
-    expect(shouldKeepAvatarVisible(false, false, 3500, 1000, true)).toBe(false);
-  });
-
-  it('recognizes the novel UI input contract without a CSS state class', () => {
-    expect(isChatInputActive({ id: 'bottom-sheet-input' } as Element, false)).toBe(true);
-    expect(isChatInputActive({ id: 'another-input' } as Element, true)).toBe(true);
-    expect(isChatInputActive({ id: 'another-input' } as Element, false)).toBe(false);
   });
 
   it('classifies camera permission failures by DOMException name before message fallback', () => {
