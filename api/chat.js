@@ -122,6 +122,7 @@ export function createChatHandler({
       );
       baseMetadata.route = result.route;
       baseMetadata.model = result.model || baseMetadata.model;
+      baseMetadata.knowledge = result.knowledge;
       logger.info('[API]', createRequestMetadata({ ...baseMetadata, now: now(), status: 200 }));
       return res.status(200).json({
         message: result.text,

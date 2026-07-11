@@ -6,7 +6,7 @@ export const COMPANY_KNOWLEDGE: readonly KnowledgeEntry[] = [
   {
     id: 'company.identity', category: 'company', title: 'Cor.Inc.について',
     answer: 'Cor.Inc.は、名刺マーカー、3Dアバター、AI会話を組み合わせたAR技術デモを公開しています。',
-    aliases: ['会社について', 'Cor.Inc.とは', 'コアインクとは', 'どんな会社'],
+    aliases: ['会社について', '会社を紹介して', 'Cor.Inc.とは', 'コアインクとは', 'どんな会社'],
     keywords: ['Cor.Inc', '会社', 'AR', '技術デモ'], sourceIds: ['readme', 'project-summary'], visibility: 'public', reviewedAt,
   },
   {

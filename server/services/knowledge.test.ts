@@ -72,6 +72,10 @@ describe('public ambassador knowledge', () => {
     expect(searchPublicKnowledge('サービスの料金を教えて')[0]?.entry.id).toBe('faq.pricing');
   });
 
+  it('routes the production company introduction phrase to the public identity', () => {
+    expect(searchPublicKnowledge('会社を紹介して')[0]?.entry.id).toBe('company.identity');
+  });
+
   it('rejects unsafe or unbounded result limits', () => {
     expect(() => searchPublicKnowledge('会社', 0)).toThrow(RangeError);
     expect(() => searchPublicKnowledge('会社', 21)).toThrow(RangeError);

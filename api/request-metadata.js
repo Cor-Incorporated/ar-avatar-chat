@@ -15,6 +15,7 @@ export function createRequestMetadata({
   now = Date.now(),
   status,
   errorCode,
+  knowledge,
   commitSha = process.env.VERCEL_GIT_COMMIT_SHA || 'local',
 }) {
   return {
@@ -28,6 +29,12 @@ export function createRequestMetadata({
     latencyMs: typeof startedAt === 'number' ? Math.max(0, now - startedAt) : undefined,
     status,
     errorCode: SAFE_ERROR_CODES.has(errorCode) ? errorCode : undefined,
+    knowledgeSourceIds: Array.isArray(knowledge?.sourceIds)
+      ? knowledge.sourceIds.filter((value) => typeof value === 'string' && /^[a-z0-9._-]{1,64}$/i.test(value)).slice(0, 20)
+      : [],
+    knowledgeReviewedAt: Array.isArray(knowledge?.reviewedAt)
+      ? knowledge.reviewedAt.filter((value) => typeof value === 'string' && /^20\d{2}-\d{2}-\d{2}$/.test(value)).slice(0, 20)
+      : [],
     commitSha: commitSha.slice(0, 40),
   };
 }

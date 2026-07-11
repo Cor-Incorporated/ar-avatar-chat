@@ -124,6 +124,8 @@ export interface GeminiResponse {
   route?: IntentRoute;
   /** サーバーログ用。クライアント契約には公開しない。 */
   model?: string;
+  /** 公開知識の追跡用。APIレスポンス本文には公開しない。 */
+  knowledge?: { sourceIds: string[]; reviewedAt: string[] };
   functionCall?: {
     name: string;
     args: Record<string, unknown>;
