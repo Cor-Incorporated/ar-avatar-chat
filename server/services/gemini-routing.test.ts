@@ -50,6 +50,16 @@ describe('Gemini route orchestration', () => {
     expect(result.knowledge).toEqual({ sourceIds: ['readme'], reviewedAt: ['2026-07-11'] });
   });
 
+  it('returns the representative company overview deterministically for the production phrase', async () => {
+    const result = await handleFunctionCalling('key', '会社を紹介して', [], [], provider, context, { generate });
+    for (const required of ['機密データ', 'AI基盤', '業務AI', 'AI活用診断', 'Local LLM', 'PoC', 'Grift']) {
+      expect(result.text).toContain(required);
+    }
+    expect(result.model).toBe('deterministic');
+    expect(generate).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('queries Calendar exactly once for explicit calendar intent', async () => {
     const result = await handleFunctionCalling('key', '明日の公開予定を教えて', [], [], provider, context, { generate, searchKnowledge });
     expect(result.route).toBe('calendar');

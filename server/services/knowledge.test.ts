@@ -55,7 +55,7 @@ describe('public ambassador knowledge', () => {
     expect(PUBLIC_KNOWLEDGE.filter((entry) => concreteSecret.test(entry.answer))).toEqual([]);
 
     const sensitiveTopic = /顧客名|顧客情報|社内情報|機密|価格|料金|見積もり|採用条件|募集状況/;
-    const disclaimerIds = new Set(['faq.pricing', 'faq.recruitment', 'faq.case-studies', 'faq.limitations', 'disclosure.public-only']);
+    const disclaimerIds = new Set(['company.identity', 'faq.pricing', 'faq.recruitment', 'faq.case-studies', 'faq.limitations', 'disclosure.public-only']);
     expect(PUBLIC_KNOWLEDGE.filter((entry) => sensitiveTopic.test(entry.answer) && !disclaimerIds.has(entry.id))).toEqual([]);
   });
 
@@ -73,7 +73,12 @@ describe('public ambassador knowledge', () => {
   });
 
   it('routes the production company introduction phrase to the public identity', () => {
-    expect(searchPublicKnowledge('会社を紹介して')[0]?.entry.id).toBe('company.identity');
+    const overview = searchPublicKnowledge('会社を紹介して')[0]?.entry;
+    expect(overview?.id).toBe('company.identity');
+    for (const required of ['機密データ', 'AI基盤', '業務AI', 'AI活用診断', 'Local LLM', 'PoC', 'Grift']) {
+      expect(overview?.answer).toContain(required);
+    }
+    expect(overview?.answer).not.toContain('AR技術デモを公開');
   });
 
   it('rejects unsafe or unbounded result limits', () => {

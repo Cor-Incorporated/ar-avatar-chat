@@ -115,6 +115,13 @@ export async function handleFunctionCalling(
     sourceIds: [...new Set(knowledgeResults.flatMap(({ entry }) => entry.sourceIds))].sort(),
     reviewedAt: [...new Set(knowledgeResults.map(({ entry }) => entry.reviewedAt))].sort(),
   } : undefined;
+  const companyOverview = knowledgeResults.find(({ entry }) => entry.id === 'company.identity')?.entry;
+  if (route === 'company' && exactKnowledgeQuestion && companyOverview) {
+    return {
+      text: companyOverview.answer,
+      emotion: 'neutral', route, model: 'deterministic', knowledge,
+    };
+  }
   if (route === 'company' && !knowledgeResults.length) {
     return {
       text: 'その会社情報は、登録済みの公開知識では確認できんかったと。確認できない内容は推測して案内できんとよ。',
