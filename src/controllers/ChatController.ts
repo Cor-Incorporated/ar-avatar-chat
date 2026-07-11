@@ -9,20 +9,19 @@ interface AvatarEmotionController {
   playEmotion(emotion: string): void;
 }
 
-const PUBLIC_RETRY_REASONS = new Set([
-  'calendar_not_configured',
-  'calendar_unauthorized',
+type PublicRetryReason = 'calendar_unavailable';
+
+const PUBLIC_RETRY_REASONS: ReadonlySet<string> = new Set<PublicRetryReason>([
   'calendar_unavailable',
-  'calendar_rate_limited',
-  'invalid_calendar_range',
 ]);
 
+function normalizeRetryReason(reason: string): PublicRetryReason | 'unknown' {
+  return PUBLIC_RETRY_REASONS.has(reason) ? 'calendar_unavailable' : 'unknown';
+}
+
 function nonRetryableMessage(reason: string): string {
-  if (reason === 'calendar_not_configured') {
+  if (reason === 'calendar_unavailable') {
     return 'カレンダー連携は現在利用できません。管理者に確認してください。';
-  }
-  if (reason === 'invalid_calendar_range') {
-    return '指定した期間を確認して、質問を変えてください。';
   }
   return 'この内容では再試行できません。質問を変えてください。';
 }
@@ -80,7 +79,7 @@ export class ChatController {
       // アシスタントのメッセージを追加
       this.bottomSheet.addMessage('assistant', data.message);
       if (data.action?.type === 'retry') {
-        const reason = PUBLIC_RETRY_REASONS.has(data.action.reason) ? data.action.reason : 'unknown';
+        const reason = normalizeRetryReason(data.action.reason);
         console.warn('[Chat Controller] Retry requested', { reason });
         if (data.action.retryable === false) {
           this.bottomSheet.showError(nonRetryableMessage(reason));
