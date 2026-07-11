@@ -91,7 +91,9 @@ export async function handleFunctionCalling(
   attachments: ChatAttachment[] = [], conversationHistory: ConversationHistoryItem[] = [],
   provider?: CalendarProvider, context: RequestContext = createRequestContext(), deps: GeminiDependencies = {}
 ): Promise<GeminiResponse> {
-  let route = classifyIntentRoute(userPrompt).route;
+  const intent = classifyIntentRoute(userPrompt);
+  let route = intent.route;
+  let needsCalendar = intent.signals.includes('calendar');
   const temporalFact = resolveTemporalFact(userPrompt, context);
   if (temporalFact && route !== 'mixed' && route !== 'calendar') {
     return { ...temporalFactResponse(temporalFact), route: 'temporal', model: 'deterministic' };
@@ -104,7 +106,10 @@ export async function handleFunctionCalling(
   const exactKnowledgeQuestion = knowledgeResults.some(({ entry }) =>
     [entry.title, ...entry.aliases].some((candidate) => normalizeKnowledgeText(candidate) === normalizedPrompt));
   // 「いつカレンダーを使う」のようなFAQはCalendar実データ取得ではなく公開知識で答える。
-  if (route === 'calendar' && exactKnowledgeQuestion) route = 'ordinary';
+  if (route === 'calendar' && exactKnowledgeQuestion) {
+    route = 'ordinary';
+    needsCalendar = false;
+  }
   const knowledgeText = knowledgeResults.map(({ entry }) => `${entry.title}: ${entry.answer}`).join('\n');
   const knowledge = knowledgeResults.length ? {
     sourceIds: [...new Set(knowledgeResults.flatMap(({ entry }) => entry.sourceIds))].sort(),
@@ -116,7 +121,7 @@ export async function handleFunctionCalling(
       emotion: 'neutral', route, model: 'deterministic',
     };
   }
-  if (route !== 'calendar' && route !== 'mixed') {
+  if (!needsCalendar) {
     const response = await renderResponse(apiKey, userPrompt, attachments, conversationHistory, context, undefined, knowledgeText, deps);
     return { ...response, route, knowledge };
   }
