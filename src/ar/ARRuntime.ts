@@ -13,7 +13,7 @@ import {
   ArToolkitSource,
 } from '@ar-js-org/ar.js/three.js/build/ar-threex.mjs';
 import { AvatarController } from './AvatarController.js';
-import { clampFrameDelta, coverProjectionScale, shouldKeepAvatarVisible } from './runtimeMath.js';
+import { clampFrameDelta, coverProjectionScale, isChatInputActive, shouldKeepAvatarVisible } from './runtimeMath.js';
 
 export class ARRuntime extends EventTarget {
   readonly avatar = new AvatarController();
@@ -33,6 +33,7 @@ export class ARRuntime extends EventTarget {
   private hasTrackedPose = false;
   private markerGraceUntil = 0;
   private cameraParametersUrl: string | null = null;
+  private keyboardOverlayActive = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     super();
@@ -46,7 +47,12 @@ export class ARRuntime extends EventTarget {
     const key = new DirectionalLight(0xffffff, 0.8);
     key.position.set(1, 2, 1);
     this.scene.add(key);
+    window.addEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
   }
+
+  private handleKeyboardOverlayChange = (event: Event): void => {
+    this.keyboardOverlayActive = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
+  };
 
   async start(): Promise<void> {
     await this.initializeTracking();
@@ -185,7 +191,7 @@ export class ARRuntime extends EventTarget {
       this.smoothedRoot.visible = true;
       this.markerGraceUntil = performance.now() + 2500;
     } else {
-      const keyboardActive = document.documentElement.classList.contains('keyboard-overlay-active');
+      const keyboardActive = isChatInputActive(document.activeElement, this.keyboardOverlayActive);
       this.smoothedRoot.visible = shouldKeepAvatarVisible(
         this.hasTrackedPose,
         false,
@@ -211,6 +217,7 @@ export class ARRuntime extends EventTarget {
     cancelAnimationFrame(this.frame);
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('orientationchange', this.resize);
+    window.removeEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
     this.markerControls?.dispose?.();
     this.source?.dispose();
     if (this.cameraParametersUrl) URL.revokeObjectURL(this.cameraParametersUrl);

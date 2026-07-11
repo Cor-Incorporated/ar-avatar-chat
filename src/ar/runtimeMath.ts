@@ -33,6 +33,10 @@ export function shouldKeepAvatarVisible(
   return hasTrackedPose && (markerVisible || keyboardActive || now < graceUntil);
 }
 
+export function isChatInputActive(activeElement: Pick<Element, 'id'> | null, explicitlyActive: boolean): boolean {
+  return explicitlyActive || activeElement?.id === 'bottom-sheet-input';
+}
+
 export function setUniformScale(object: Object3D, scale: number): void {
   if (!Number.isFinite(scale) || scale <= 0) {
     throw new RangeError('Avatar scale must be a positive finite number');
