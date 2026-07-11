@@ -5,7 +5,7 @@ export type CalendarErrorCode =
   | 'calendar_rate_limited'
   | 'invalid_calendar_range';
 
-export type CalendarRangeKind = 'today' | 'tomorrow' | 'this_week' | 'explicit_range';
+export type CalendarRangeKind = 'today' | 'tomorrow' | 'this_week' | 'next_week' | 'explicit_range';
 
 export interface CalendarQuery {
   kind: CalendarRangeKind;
