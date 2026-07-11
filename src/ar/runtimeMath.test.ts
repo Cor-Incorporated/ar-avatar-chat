@@ -1,4 +1,4 @@
-import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D } from 'three';
+import { BoxGeometry, Euler, Mesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, MAX_FRAME_DELTA_SECONDS, setUniformScale, snapObjectTransform } from './runtimeMath.js';
 
@@ -18,15 +18,18 @@ describe('AR runtime math', () => {
 
   it('snaps a reacquired marker pose instead of interpolating through the camera origin', () => {
     const marker = new Object3D();
-    marker.position.set(1, 2, -6);
-    marker.rotation.set(0.2, 0.4, 0.1);
-    marker.scale.setScalar(1.25);
+    marker.matrixAutoUpdate = false;
+    const expectedPosition = new Vector3(1, 2, -6);
+    const expectedRotation = new Quaternion().setFromEuler(new Euler(0.2, 0.4, 0.1));
+    const expectedScale = new Vector3(1.25, 1.25, 1.25);
+    marker.matrix.compose(expectedPosition, expectedRotation, expectedScale);
     const smoothed = new Object3D();
 
     snapObjectTransform(smoothed, marker);
 
-    expect(smoothed.position.toArray()).toEqual(marker.position.toArray());
-    expect(smoothed.quaternion.toArray()).toEqual(marker.quaternion.toArray());
+    expect(marker.position.toArray()).toEqual([0, 0, 0]);
+    expect(smoothed.position.toArray()).toEqual(expectedPosition.toArray());
+    expect(smoothed.quaternion.angleTo(expectedRotation)).toBeCloseTo(0);
     expect(smoothed.scale.toArray()).toEqual([1.25, 1.25, 1.25]);
   });
 

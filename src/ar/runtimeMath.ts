@@ -38,9 +38,10 @@ export function setUniformScale(object: Object3D, scale: number): void {
 }
 
 export function snapObjectTransform(target: Object3D, source: Object3D): void {
-  target.position.copy(source.position);
-  target.quaternion.copy(source.quaternion);
-  target.scale.copy(source.scale);
+  // AR.js MarkerControls disables matrixAutoUpdate and writes the detected
+  // pose straight into `matrix`. Its position/quaternion/scale therefore stay
+  // at their defaults and must not be copied.
+  source.matrix.decompose(target.position, target.quaternion, target.scale);
   target.updateMatrix();
   target.updateMatrixWorld(true);
 }
