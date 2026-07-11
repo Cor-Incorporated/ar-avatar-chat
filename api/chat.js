@@ -28,12 +28,13 @@ export default async function handler(req, res) {
     console.log('[API] 履歴ターン数:', Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory.length : 0);
     
     // 動的インポート（Vercel環境用）
-    let handleFunctionCalling, allowChatRequest, normalizeClientIp;
+    let handleFunctionCalling, allowChatRequest, normalizeClientIp, createRequestContext, getGeminiModel;
     try {
       console.log('[API] Geminiサービスをインポート中...');
       const module = await import('../server/dist/services/gemini.service.js');
       handleFunctionCalling = module.handleFunctionCalling;
       ({ allowChatRequest, normalizeClientIp } = await import('../server/dist/services/rate-limit.service.js'));
+      ({ createRequestContext, getGeminiModel } = await import('../server/dist/services/request-context.service.js'));
       console.log('[API] インポート成功');
     } catch (importError) {
       console.error('[API] インポートエラー詳細:', importError.message, importError.stack);
@@ -71,8 +72,23 @@ export default async function handler(req, res) {
       });
       return;
     }
+    try {
+      getGeminiModel(process.env);
+    } catch {
+      console.error('[API] GEMINI_MODELが未設定または未承認です');
+      res.status(500).json({ error: 'サーバー設定エラー', message: 'API設定が不足しています。', emotion: 'sad' });
+      return;
+    }
 
-    console.log('[API] ユーザーメッセージ:', normalizedMessage || '画像のみ');
+    console.log('[API] 入力メタデータ:', { messageLength: normalizedMessage.length, hasAttachments });
+
+    let requestContext;
+    try {
+      requestContext = createRequestContext(new Date(), timezone || 'Asia/Tokyo');
+    } catch {
+      res.status(400).json({ error: '未対応のタイムゾーンです', message: '日本時間で試してね。', emotion: 'sad' });
+      return;
+    }
 
     const result = await handleFunctionCalling(
       process.env.GEMINI_API_KEY,
@@ -80,15 +96,15 @@ export default async function handler(req, res) {
       attachments || [],
       conversationHistory || [],
       undefined,
-      timezone || 'Asia/Tokyo'
+      requestContext
     );
 
-    console.log('[API] Gemini応答:', result);
+    console.log('[API] 応答メタデータ:', { emotion: result.emotion, hasCalendar: Boolean(result.calendar), hasAction: Boolean(result.action) });
 
     res.status(200).json({
       message: result.text,
       emotion: result.emotion,
-      timestamp: new Date(),
+      timestamp: requestContext.now,
       action: result.action,
       calendar: result.calendar
     });
