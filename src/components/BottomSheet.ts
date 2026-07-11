@@ -35,6 +35,7 @@ export class BottomSheet {
   private readonly listenerController = new AbortController();
   private blurTimer: number | null = null;
   private liveRegionTimer: number | null = null;
+  private attachmentErrorTimer: number | null = null;
 
   constructor() {
     this.createBottomSheet();
@@ -264,12 +265,18 @@ export class BottomSheet {
     if (!this.attachmentPreview) return;
     this.attachmentPreview.innerHTML = `<div class="attachment-error">${this.escapeHtml(message)}</div>`;
     this.attachmentPreview.classList.add('is-visible');
-    window.setTimeout(() => {
+    if (this.attachmentErrorTimer !== null) window.clearTimeout(this.attachmentErrorTimer);
+    this.attachmentErrorTimer = window.setTimeout(() => {
+      this.attachmentErrorTimer = null;
       if (!this.pendingAttachment && this.attachmentPreview) this.clearAttachment();
     }, 3000);
   }
 
   private clearAttachment(): void {
+    if (this.attachmentErrorTimer !== null) {
+      window.clearTimeout(this.attachmentErrorTimer);
+      this.attachmentErrorTimer = null;
+    }
     this.pendingAttachment = null;
     if (this.attachmentPreview) {
       this.attachmentPreview.classList.remove('is-visible');
@@ -441,10 +448,20 @@ export class BottomSheet {
     this.listenerController.abort();
     if (this.blurTimer !== null) window.clearTimeout(this.blurTimer);
     if (this.liveRegionTimer !== null) window.clearTimeout(this.liveRegionTimer);
+    if (this.attachmentErrorTimer !== null) window.clearTimeout(this.attachmentErrorTimer);
     this.retryCallback = null;
     this.onSendMessage = null;
     this.container?.remove();
     this.container = null;
     this.messagesContainer = null;
+    this.inputContainer = null;
+    this.attachmentPreview = null;
+    this.statusElement = null;
+    this.inputElement = null;
+    this.fileInputElement = null;
+    this.attachButton = null;
+    this.cameraButton = null;
+    this.sendButton = null;
+    this.retryButton = null;
   }
 }

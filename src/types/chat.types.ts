@@ -82,14 +82,3 @@ export interface MessageSendPayload {
  * ボトムシート状態
  */
 export type BottomSheetState = 'collapsed' | 'peek' | 'expanded';
-
-/**
- * ボトムシート設定
- */
-export interface BottomSheetConfig {
-  collapsedHeight: number;
-  peekHeight: number;
-  expandedHeight: number;
-  dragThreshold: number;
-  animationDuration: number;
-}
