@@ -11,6 +11,12 @@ export function shouldDeferViewportResize(keyboardOverlayActive: boolean): boole
   return keyboardOverlayActive;
 }
 
+export type ARSourceOrientation = 'portrait' | 'landscape';
+
+export function detectARSourceOrientation(renderedWidth: number, renderedHeight: number): ARSourceOrientation {
+  return renderedWidth > renderedHeight ? 'landscape' : 'portrait';
+}
+
 export type RectSnapshot = Pick<DOMRectReadOnly, 'left' | 'top' | 'width' | 'height'>;
 
 export function areViewportRectsStable(

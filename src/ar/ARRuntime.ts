@@ -17,7 +17,7 @@ import {
   ArToolkitSource,
 } from '@ar-js-org/ar.js/three.js/build/ar-threex.mjs';
 import { AvatarController } from './AvatarController.js';
-import { areViewportRectsStable, clampFrameDelta, coverProjectionScale, type RectSnapshot, shouldDeferViewportResize } from './runtimeMath.js';
+import { areViewportRectsStable, clampFrameDelta, coverProjectionScale, detectARSourceOrientation, type RectSnapshot, shouldDeferViewportResize } from './runtimeMath.js';
 
 export class ARRuntime extends EventTarget {
   readonly avatar = new AvatarController();
@@ -174,15 +174,29 @@ export class ARRuntime extends EventTarget {
     document.documentElement.style.setProperty('--ar-layout-width', `${width}px`);
     document.documentElement.style.setProperty('--ar-layout-height', `${height}px`);
     this.renderer.setSize(width, height, false);
-    if (this.context && this.source.domElement.videoWidth > 0) {
-      // Keep AR.js' calibrated projection untouched until the marker-space
-      // baseline is visible. Display cropping belongs to the layer layout;
-      // multiplying this matrix here made diagnostics diverge from AR.js.
-      this.camera.projectionMatrix.copy(this.context.getProjectionMatrix());
+    const controller = this.context?.arController;
+    if (this.context && controller && this.source.domElement.videoWidth > 0) {
+      const rendered = this.source.domElement.getBoundingClientRect();
+      const orientation = detectARSourceOrientation(rendered.width, rendered.height);
+      controller.orientation = orientation;
+      controller.options ??= {};
+      controller.options.orientation = orientation;
+      // Start from ARToolkit's current calibrated camera matrix, then apply
+      // only the cover crop required to map its 4:3 camera plane onto the
+      // fixed viewport. Both axes remain uniformly represented in pixels.
+      this.camera.projectionMatrix.fromArray(controller.getCameraMatrix());
+      const correction = coverProjectionScale(
+        this.source.domElement.videoWidth,
+        this.source.domElement.videoHeight,
+        width,
+        height,
+      );
+      this.camera.projectionMatrix.elements[0] *= correction.x;
+      this.camera.projectionMatrix.elements[5] *= correction.y;
       this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     }
-    if (this.context?.arController) {
-      this.source.copyElementSizeTo(this.context.arController.canvas);
+    if (controller) {
+      this.source.copyElementSizeTo(controller.canvas);
     }
     if (new URLSearchParams(location.search).get('debug') === 'true') {
       console.debug('[AR diagnostics]', {
@@ -198,6 +212,7 @@ export class ARRuntime extends EventTarget {
           x: this.camera.projectionMatrix.elements[0],
           y: this.camera.projectionMatrix.elements[5],
         },
+        orientation: controller?.orientation,
       });
     }
   };

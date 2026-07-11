@@ -1,6 +1,6 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, areViewportRectsStable, clampFrameDelta, coverProjectionScale, isCameraPermissionError, isObjectSafelyInCameraView, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize } from './runtimeMath.js';
+import { anchorAvatarToFeet, areViewportRectsStable, clampFrameDelta, coverProjectionScale, detectARSourceOrientation, isCameraPermissionError, isObjectSafelyInCameraView, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -70,6 +70,11 @@ describe('AR runtime math', () => {
 
     expect(areViewportRectsStable(before, withinRoundingTolerance)).toBe(true);
     expect(areViewportRectsStable(before, keyboardResized)).toBe(false);
+  });
+
+  it('reports the rendered camera orientation used by ARToolkit', () => {
+    expect(detectARSourceOrientation(390, 844)).toBe('portrait');
+    expect(detectARSourceOrientation(844, 390)).toBe('landscape');
   });
 
   it('classifies camera permission failures by DOMException name before message fallback', () => {
