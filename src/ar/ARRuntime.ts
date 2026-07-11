@@ -17,7 +17,7 @@ import {
   ArToolkitSource,
 } from '@ar-js-org/ar.js/three.js/build/ar-threex.mjs';
 import { AvatarController } from './AvatarController.js';
-import { areViewportRectsStable, clampFrameDelta, coverProjectionScale, detectARSourceOrientation, type RectSnapshot, shouldDeferViewportResize } from './runtimeMath.js';
+import { areViewportRectsStable, clampFrameDelta, coverProjectionScale, detectARSourceOrientation, isObjectSafelyInCameraView, type RectSnapshot, shouldDeferViewportResize } from './runtimeMath.js';
 
 export class ARRuntime extends EventTarget {
   readonly avatar = new AvatarController();
@@ -35,6 +35,8 @@ export class ARRuntime extends EventTarget {
   private cameraParametersUrl: string | null = null;
   private keyboardOverlayActive = false;
   private keyboardRectSnapshot: RectSnapshot[] | null = null;
+  private avatarPoseSafe = false;
+  private safetyCheckCountdown = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     super();
@@ -269,6 +271,22 @@ export class ARRuntime extends EventTarget {
       // avatar directly below this anchor avoids copying stale/decomposed
       // transforms and gives tracking a single source of truth.
       this.markerRoot.updateMatrixWorld(true);
+      if (!this.lastMarkerVisible || this.safetyCheckCountdown <= 0) {
+        // Re-enable only for bounds evaluation; the final visibility is set
+        // before render, so an unsafe near-camera pose never flashes onscreen.
+        this.avatar.root.visible = true;
+        this.avatarPoseSafe = isObjectSafelyInCameraView(this.avatar.root, this.camera);
+        this.safetyCheckCountdown = 6;
+      } else {
+        this.safetyCheckCountdown -= 1;
+      }
+      this.avatar.root.visible = this.avatarPoseSafe;
+    } else {
+      // MarkerControls hides the parent. Restore the child so bounds can be
+      // evaluated immediately when the marker is reacquired.
+      this.avatar.root.visible = true;
+      this.avatarPoseSafe = false;
+      this.safetyCheckCountdown = 0;
     }
     if (markerVisible && !this.lastMarkerVisible) {
       this.avatar.ensureIdle();

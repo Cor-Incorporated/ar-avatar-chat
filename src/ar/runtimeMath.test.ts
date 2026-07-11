@@ -45,6 +45,16 @@ describe('AR runtime math', () => {
     expect(isObjectSafelyInCameraView(avatarAtCamera, camera)).toBe(false);
   });
 
+  it('rejects avatar bounds behind the camera or outside the clip volume', () => {
+    const camera = new PerspectiveCamera(45, 390 / 844, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const avatar = new Mesh(new BoxGeometry(0.8, 1.8, 0.5), new MeshBasicMaterial());
+    avatar.position.set(0, 0.9, 4);
+    expect(isObjectSafelyInCameraView(avatar, camera)).toBe(false);
+    avatar.position.set(20, 0.9, -4);
+    expect(isObjectSafelyInCameraView(avatar, camera)).toBe(false);
+  });
+
   it('corrects camera projection for cover cropping without stretching', () => {
     const portrait = coverProjectionScale(1280, 960, 390, 844);
     const landscape = coverProjectionScale(1280, 960, 844, 390);
