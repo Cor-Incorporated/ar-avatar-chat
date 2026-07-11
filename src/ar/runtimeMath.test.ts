@@ -1,6 +1,6 @@
-import { BoxGeometry, Euler, Mesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three';
+import { BoxGeometry, Euler, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
+import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, isObjectSafelyInCameraView, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -31,6 +31,38 @@ describe('AR runtime math', () => {
     expect(smoothed.position.toArray()).toEqual(expectedPosition.toArray());
     expect(smoothed.quaternion.angleTo(expectedRotation)).toBeCloseTo(0);
     expect(smoothed.scale.toArray()).toEqual([1.25, 1.25, 1.25]);
+  });
+
+  it('places avatar scene bounds inside the camera frustum from an AR.js marker matrix', () => {
+    const camera = new PerspectiveCamera(45, 390 / 844, 0.1, 100);
+    camera.updateProjectionMatrix();
+
+    const marker = new Object3D();
+    marker.matrixAutoUpdate = false;
+    marker.matrix.compose(
+      new Vector3(0, 0, -4),
+      new Quaternion(),
+      new Vector3(1, 1, 1),
+    );
+    const smoothedRoot = new Object3D();
+    const avatar = new Mesh(new BoxGeometry(0.8, 1.8, 0.5), new MeshBasicMaterial());
+    avatar.position.y = 0.9;
+    smoothedRoot.add(avatar);
+
+    snapObjectTransform(smoothedRoot, marker);
+
+    expect(isObjectSafelyInCameraView(smoothedRoot, camera)).toBe(true);
+  });
+
+  it('rejects the old failure mode where avatar bounds remain at the camera origin', () => {
+    const camera = new PerspectiveCamera(45, 390 / 844, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const avatarAtCamera = new Mesh(
+      new BoxGeometry(0.8, 1.8, 0.5),
+      new MeshBasicMaterial(),
+    );
+
+    expect(isObjectSafelyInCameraView(avatarAtCamera, camera)).toBe(false);
   });
 
   it('corrects camera projection for cover cropping without stretching', () => {

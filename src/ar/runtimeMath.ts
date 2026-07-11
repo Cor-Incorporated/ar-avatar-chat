@@ -1,4 +1,4 @@
-import { Box3, Object3D, Vector3 } from 'three';
+import { Box3, Camera, Frustum, Matrix4, Object3D, Vector3 } from 'three';
 
 export const MAX_FRAME_DELTA_SECONDS = 1 / 15;
 
@@ -48,6 +48,30 @@ export function snapObjectTransform(target: Object3D, source: Object3D): void {
   source.matrix.decompose(target.position, target.quaternion, target.scale);
   target.updateMatrix();
   target.updateMatrixWorld(true);
+}
+
+/**
+ * Scene graph上の実境界がカメラを内包せず、描画錐台と交差することを確認する。
+ *
+ * rootのscaleやCSS寸法だけでは、AR.jsのmarker行列が正しく姿勢へ反映され、
+ * モデルがカメラ原点へ残っていないことまでは保証できない。この契約は
+ * marker復元後のworld matrixと実ジオメトリを使って、その失敗を検出する。
+ */
+export function isObjectSafelyInCameraView(object: Object3D, camera: Camera): boolean {
+  object.updateWorldMatrix(true, true);
+  camera.updateWorldMatrix(true, false);
+
+  const bounds = new Box3().setFromObject(object);
+  if (bounds.isEmpty()) return false;
+
+  const cameraPosition = camera.getWorldPosition(new Vector3());
+  if (bounds.containsPoint(cameraPosition)) return false;
+
+  const viewProjection = new Matrix4().multiplyMatrices(
+    camera.projectionMatrix,
+    camera.matrixWorldInverse,
+  );
+  return new Frustum().setFromProjectionMatrix(viewProjection).intersectsBox(bounds);
 }
 
 export function anchorAvatarToFeet(object: Object3D): void {
