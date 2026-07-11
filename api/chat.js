@@ -52,7 +52,7 @@ export function createChatHandler({
       attachments: body.attachments,
       conversationHistory: body.conversationHistory,
       timezone: body.timezone || 'Asia/Tokyo',
-      model: env.GEMINI_MODEL || 'default',
+      model: env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
       startedAt,
     };
 

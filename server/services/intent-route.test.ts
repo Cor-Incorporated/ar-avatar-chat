@@ -6,6 +6,10 @@ describe('intent route classifier', () => {
     expect(classifyIntentRoute(message)).toEqual({ route: 'ordinary', signals: [] });
   });
 
+  it.each(['他の会社に転職しようか迷ってる', 'このサービス使いやすいね', '事業を始めた友人へ贈り物をしたい'])('does not treat generic company words as Cor.Inc facts: %s', (message) => {
+    expect(classifyIntentRoute(message)).toEqual({ route: 'ordinary', signals: [] });
+  });
+
   it.each(['今何時？', '今日は何曜日ですか', '今日何日？', '現在の日時を教えて'])('routes temporal facts: %s', (message) => {
     expect(classifyIntentRoute(message).route).toBe('temporal');
   });
