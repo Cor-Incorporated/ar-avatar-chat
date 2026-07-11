@@ -1,4 +1,4 @@
-import { AnimationClip, AnimationMixer, BoxGeometry, Mesh, MeshBasicMaterial, Object3D } from 'three';
+import { AnimationClip, AnimationMixer, BoxGeometry, Mesh, MeshBasicMaterial, Object3D, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { VRM } from '@pixiv/three-vrm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,7 @@ type ControllerInternals = {
   currentEmotion: AvatarEmotion;
   finishedListener: unknown;
   loadAnimation(emotion: AvatarEmotion, url: URL): Promise<void>;
+  anchorToHumanoidFeet(vrm: VRM): void;
 };
 
 afterEach(() => vi.restoreAllMocks());
@@ -35,6 +36,33 @@ function finishedListenerCount(mixer: AnimationMixer): number {
 }
 
 describe('AvatarController emotion transitions', () => {
+  it('anchors scaled humanoid feet on the marker plane', () => {
+    const controller = new AvatarController();
+    const internals = controller as unknown as ControllerInternals;
+    const scene = new Object3D();
+    scene.scale.setScalar(0.78);
+    const leftFoot = new Object3D();
+    const rightFoot = new Object3D();
+    leftFoot.position.set(-0.2, 1, 0.1);
+    rightFoot.position.set(0.2, 1, -0.1);
+    scene.add(leftFoot, rightFoot);
+    const vrm = {
+      scene,
+      humanoid: {
+        getNormalizedBoneNode: (bone: string) => bone === 'leftFoot' ? leftFoot : rightFoot,
+      },
+    } as unknown as VRM;
+
+    internals.anchorToHumanoidFeet(vrm);
+    scene.updateWorldMatrix(true, true);
+    const leftWorld = leftFoot.getWorldPosition(new Vector3());
+    const rightWorld = rightFoot.getWorldPosition(new Vector3());
+
+    expect(Math.min(leftWorld.y, rightWorld.y)).toBeCloseTo(0);
+    expect((leftWorld.x + rightWorld.x) / 2).toBeCloseTo(0);
+    expect((leftWorld.z + rightWorld.z) / 2).toBeCloseTo(0);
+  });
+
   it('replaces an interrupted emotion listener and only the active action returns to neutral', () => {
     const { controller, internals, mixer } = createController();
     controller.playEmotion('happy');
