@@ -136,9 +136,25 @@ describe('Gemini route orchestration', () => {
     expect(result.route).toBe('mixed');
     expect(query).toHaveBeenCalledOnce();
     const finalCall = calls[calls.length - 1];
-    expect(finalCall.messages[finalCall.messages.length - 1].content).toBe('明日の公開予定も教えて');
+    expect(finalCall.messages[finalCall.messages.length - 1].content).toContain('公開Calendar事実だけ');
     expect(JSON.stringify(finalCall)).not.toContain('未公開売上');
     expect(finalCall.system).toContain('登録済み公開知識で確認できない');
+  });
+
+  it('removes a same-clause company secret and history from a mixed Calendar prompt', async () => {
+    searchKnowledge.mockReturnValueOnce([]);
+    await handleFunctionCalling(
+      'key', '御社の未公開売上と明日の公開予定を教えて',
+      [], [{ role: 'model', content: '顧客Aの売上は1億円' }], provider, context,
+      { generate, searchKnowledge },
+    );
+    const finalCall = calls[calls.length - 1];
+    const serialized = JSON.stringify(finalCall);
+    expect(serialized).not.toContain('未公開売上');
+    expect(serialized).not.toContain('顧客A');
+    expect(serialized).not.toContain('1億円');
+    expect(finalCall.messages).toHaveLength(1);
+    expect(finalCall.messages[0].content).toContain('公開Calendar事実だけ');
   });
 
   it('drops an unrelated reservation clause from the Calendar model prompt', async () => {

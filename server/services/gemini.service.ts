@@ -160,15 +160,23 @@ export async function handleFunctionCalling(
     });
     calendarResult = execution.toolResults[0]?.output as CalendarResult | undefined;
     if (!calendarResult) calendarResult = await calendarProvider.query(query);
-    const safePrompt = splitIntentClauses(userPrompt).filter((clause) => {
-      const clauseSignals = classifyIntentRoute(clause).signals;
-      if (clauseSignals.includes('calendar') || clauseSignals.includes('temporal')) return true;
-      return knowledgeResults.length > 0 && clauseSignals.includes('company');
-    }).join('、') || userPrompt;
+    const safePrompt = unknownCompanyInMixed
+      ? '取得済みの公開Calendar事実だけを案内し、会社情報は公開知識に未登録と明示してください。'
+      : splitIntentClauses(userPrompt).filter((clause) => {
+        const clauseSignals = classifyIntentRoute(clause).signals;
+        if (clauseSignals.includes('calendar') || clauseSignals.includes('temporal')) return true;
+        return knowledgeResults.length > 0 && clauseSignals.includes('company');
+      }).join('、');
     const safeKnowledgeText = unknownCompanyInMixed
       ? '会社情報は登録済み公開知識で確認できないため推測せず、その旨を明示してください。'
       : knowledgeText;
-    const response = await renderResponse(apiKey, safePrompt, attachments, conversationHistory, context, calendarResult, safeKnowledgeText, deps);
+    const response = await renderResponse(
+      apiKey,
+      safePrompt,
+      unknownCompanyInMixed ? [] : attachments,
+      unknownCompanyInMixed ? [] : conversationHistory,
+      context, calendarResult, safeKnowledgeText, deps,
+    );
     return { ...response, route, knowledge, calendar: { queriedRange: calendarResult.queriedRange, publicEventCount: calendarResult.events.length, availabilityProvided: Boolean(calendarResult.availability) } };
   } catch (error) {
     const code = error instanceof CalendarProviderError ? error.code : 'calendar_unavailable';
