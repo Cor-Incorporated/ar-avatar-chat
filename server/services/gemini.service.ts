@@ -98,10 +98,17 @@ export async function handleFunctionCalling(
   if (temporalFact && route !== 'mixed' && route !== 'calendar') {
     return { ...temporalFactResponse(temporalFact), route: 'temporal', model: 'deterministic' };
   }
-  const knowledgeResults = (deps.searchKnowledge ?? searchPublicKnowledge)(userPrompt).filter(({ entry }) =>
-    entry.visibility === 'public'
-    && entry.sourceIds.length > 0
+  const clauses = splitIntentClauses(userPrompt);
+  const companyClauses = clauses.filter((clause) => classifyIntentRoute(clause).signals.includes('company'));
+  const search = deps.searchKnowledge ?? searchPublicKnowledge;
+  const approve = (results: ReturnType<typeof searchPublicKnowledge>) => results.filter(({ entry }) =>
+    entry.visibility === 'public' && entry.sourceIds.length > 0
     && entry.sourceIds.every((sourceId) => APPROVED_KNOWLEDGE_SOURCE_IDS.has(sourceId)));
+  const companyKnowledge = companyClauses.map((clause) => ({ clause, results: approve(search(clause)) }));
+  const rawKnowledgeResults = companyClauses.length ? companyKnowledge.flatMap(({ results }) => results) : approve(search(userPrompt));
+  const knowledgeResults = [...new Map(rawKnowledgeResults.map((result) => [result.entry.id, result])).values()];
+  const knownCompanyClauses = new Set(companyKnowledge.filter(({ results }) => results.length).map(({ clause }) => clause));
+  const unknownCompanyClauses = companyKnowledge.filter(({ results }) => !results.length).map(({ clause }) => clause);
   const normalizedPrompt = normalizeKnowledgeText(userPrompt);
   const exactKnowledgeQuestion = knowledgeResults.some(({ entry }) =>
     [entry.title, ...entry.aliases].some((candidate) => normalizeKnowledgeText(candidate) === normalizedPrompt));
@@ -117,11 +124,12 @@ export async function handleFunctionCalling(
   } : undefined;
   const companyOverview = knowledgeResults.find(({ entry }) => entry.id === 'company.identity')?.entry;
   const companyOverviewExact = companyOverview
-    ? [companyOverview.title, ...companyOverview.aliases].some((candidate) => normalizeKnowledgeText(candidate) === normalizedPrompt)
+    ? companyClauses.some((clause) => [companyOverview.title, ...companyOverview.aliases]
+      .some((candidate) => normalizeKnowledgeText(candidate) === normalizeKnowledgeText(clause)))
     : false;
   if (route === 'company' && companyOverviewExact && companyOverview) {
     return {
-      text: companyOverview.answer,
+      text: `${companyOverview.answer}${unknownCompanyClauses.length ? ' なお、ほかの会社情報は公開知識に未登録のため推測して案内できません。' : ''}`,
       emotion: 'neutral', route, model: 'deterministic', knowledge,
     };
   }
@@ -131,15 +139,22 @@ export async function handleFunctionCalling(
       emotion: 'neutral', route, model: 'deterministic',
     };
   }
-  const unknownCompanyInMixed = route === 'mixed' && intent.signals.includes('company') && !knowledgeResults.length;
+  const unknownCompanyInMixed = route === 'mixed' && unknownCompanyClauses.length > 0;
   if (unknownCompanyInMixed && !needsCalendar) {
+    const temporalResponse = clauses.map((clause) => resolveTemporalFact(clause, context)).find(Boolean);
     return {
-      text: `その会社情報は登録済みの公開知識では確認できんかったと。${buildCurrentTimeInstruction(context)}`,
+      text: `その会社情報は登録済みの公開知識では確認できんかったと。${temporalResponse ? temporalFactResponse(temporalResponse).text : ''}`,
       emotion: 'neutral', route, model: 'deterministic',
     };
   }
   if (!needsCalendar) {
-    const response = await renderResponse(apiKey, userPrompt, attachments, conversationHistory, context, undefined, knowledgeText, deps);
+    const safeCompanyPrompt = unknownCompanyClauses.length
+      ? clauses.filter((clause) => !companyClauses.includes(clause) || knownCompanyClauses.has(clause)).join('、')
+      : userPrompt;
+    const safeKnowledge = unknownCompanyClauses.length
+      ? `${knowledgeText}\n未登録の会社情報は推測せず、公開知識に未登録と明示してください。`
+      : knowledgeText;
+    const response = await renderResponse(apiKey, safeCompanyPrompt, attachments, conversationHistory, context, undefined, safeKnowledge, deps);
     return { ...response, route, knowledge };
   }
 
@@ -167,10 +182,10 @@ export async function handleFunctionCalling(
       : splitIntentClauses(userPrompt).filter((clause) => {
         const clauseSignals = classifyIntentRoute(clause).signals;
         if (clauseSignals.includes('calendar') || clauseSignals.includes('temporal')) return true;
-        return knowledgeResults.length > 0 && clauseSignals.includes('company');
+        return knownCompanyClauses.has(clause) && clauseSignals.includes('company');
       }).join('、');
     const safeKnowledgeText = unknownCompanyInMixed
-      ? '会社情報は登録済み公開知識で確認できないため推測せず、その旨を明示してください。'
+      ? `${knowledgeText}\n未登録の会社情報は推測せず、公開知識に未登録と明示してください。`
       : knowledgeText;
     const response = await renderResponse(
       apiKey,

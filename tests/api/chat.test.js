@@ -43,6 +43,7 @@ describe('/api/chat boundary harness', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ message: '通常応答', emotion: 'neutral' });
     expect(res.headers['X-Deployment-Commit']).toBe('abcdef1234567');
+    expect(res.headers['Access-Control-Allow-Credentials']).toBeUndefined();
     const requestContext = { now: new Date(123), timezone: 'Asia/Tokyo', locale: 'ja-JP' };
     expect(services.handleFunctionCalling).toHaveBeenCalledWith('test-key', 'こんにちは', [], [], undefined, requestContext);
     expect(res.body.timestamp).toEqual(requestContext.now);

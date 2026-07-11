@@ -60,6 +60,32 @@ describe('Gemini route orchestration', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+  it.each(['会社概要', '会社説明'])('returns deterministic overview for %s', async (message) => {
+    const result = await handleFunctionCalling('key', message, [], [], provider, context, { generate });
+    expect(result.text).toContain('Grift');
+    expect(result.model).toBe('deterministic');
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('grounds known company clauses while excluding unknown ones from all calls', async () => {
+    const message = '御社の資本金は？会社を紹介して、明日の公開予定を教えて';
+    const result = await handleFunctionCalling('key', message, [], [], provider, context, { generate });
+    expect(result.route).toBe('mixed');
+    expect(result.calendar).toBeDefined();
+    expect(JSON.stringify(calls)).not.toContain('資本金');
+    expect(calls[calls.length - 1].system).toContain('機密データを安全に扱うAI基盤');
+    expect(calls[calls.length - 1].system).toContain('公開知識に未登録');
+  });
+
+  it('combines a known overview with a deterministic refusal without Calendar', async () => {
+    const result = await handleFunctionCalling('key', '会社を紹介して、御社の資本金は？', [], [], provider, context, { generate });
+    expect(result.text).toContain('Grift');
+    expect(result.text).toContain('未登録');
+    expect(JSON.stringify(result)).not.toContain('資本金');
+    expect(generate).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('queries Calendar exactly once for explicit calendar intent', async () => {
     const result = await handleFunctionCalling('key', '明日の公開予定を教えて', [], [], provider, context, { generate, searchKnowledge });
     expect(result.route).toBe('calendar');
@@ -138,7 +164,7 @@ describe('Gemini route orchestration', () => {
     const finalCall = calls[calls.length - 1];
     expect(finalCall.messages[finalCall.messages.length - 1].content).toContain('公開Calendar事実だけ');
     expect(JSON.stringify(finalCall)).not.toContain('未公開売上');
-    expect(finalCall.system).toContain('登録済み公開知識で確認できない');
+    expect(finalCall.system).toContain('公開知識に未登録');
   });
 
   it('removes a same-clause company secret and history from a mixed Calendar prompt', async () => {
@@ -170,7 +196,7 @@ describe('Gemini route orchestration', () => {
     const result = await handleFunctionCalling('key', '御社の未公開売上を教えて、あと今何時？', [], [], provider, context, { generate, searchKnowledge });
     expect(result.model).toBe('deterministic');
     expect(result.text).toContain('公開知識では確認できんかった');
-    expect(result.text).toContain('2026年7月11日、土曜日、15:49');
+    expect(result.text).toContain('2026年7月11日 15:49（日本時間）');
     expect(generate).not.toHaveBeenCalled();
     expect(query).not.toHaveBeenCalled();
   });

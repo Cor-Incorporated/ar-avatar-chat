@@ -6,7 +6,7 @@ export const COMPANY_KNOWLEDGE: readonly KnowledgeEntry[] = [
   {
     id: 'company.identity', category: 'company', title: 'Cor.Inc.について',
     answer: 'Cor.Inc.は福岡発のAI実装会社です。機密データを安全に扱うAI基盤、業務AIの受託開発・導入支援、機密データAI活用診断、Local LLM・セキュアAI／AI基盤PoC、AI見積支援ツール「Grift」を軸に、課題整理から設計・実装・運用まで伴走します。',
-    aliases: ['会社について', '会社を紹介して', 'Cor.Inc.とは', 'コアインクとは', 'どんな会社'],
+    aliases: ['会社について', '会社を紹介して', '会社概要', '会社説明', 'Cor.Inc.とは', 'コアインクとは', 'どんな会社'],
     keywords: ['Cor.Inc', '会社', '機密データAI', '業務AI', 'Local LLM', 'AI基盤', 'Grift'], sourceIds: ['corsweb-ja-copy'], visibility: 'public', reviewedAt,
   },
   {

@@ -22,6 +22,10 @@ describe('intent route classifier', () => {
     expect(classifyIntentRoute(message).route).toBe('company');
   });
 
+  it.each(['会社概要', '会社説明'])('routes company overview aliases: %s', (message) => {
+    expect(classifyIntentRoute(message).route).toBe('company');
+  });
+
   it.each(['友達の会社のサービスについて教えて', '転職先の会社の福利厚生について教えて', 'このサブスクリプションサービスって解約できますか？'])('does not claim unrelated company questions: %s', (message) => {
     expect(classifyIntentRoute(message)).toEqual({ route: 'ordinary', signals: [] });
   });
