@@ -28,12 +28,13 @@ describe('/api/chat boundary harness', () => {
   it('passes the public request contract to the conversation service', async () => {
     const services = dependencies();
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    const handler = createChatHandler({ loadServices: async () => services, env: { GEMINI_API_KEY: 'test-key' }, logger, now: () => 123, createRequestId: () => 'req-1' });
+    const handler = createChatHandler({ loadServices: async () => services, env: { GEMINI_API_KEY: 'test-key', VERCEL_GIT_COMMIT_SHA: 'abcdef1234567' }, logger, now: () => 123, createRequestId: () => 'req-1' });
     const res = responseHarness();
     await handler(request({ message: ' こんにちは ', attachments: [], timezone: 'Asia/Tokyo' }), res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ message: '通常応答', emotion: 'neutral' });
+    expect(res.headers['X-Deployment-Commit']).toBe('abcdef1234567');
     expect(services.handleFunctionCalling).toHaveBeenCalledWith('test-key', 'こんにちは', [], [], undefined, 'Asia/Tokyo');
     expect(JSON.stringify(logger.info.mock.calls)).not.toContain('こんにちは');
   });

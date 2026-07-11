@@ -19,6 +19,12 @@ function setCors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
+function exposeDeploymentCommit(res, commitSha) {
+  if (typeof commitSha === 'string' && /^[a-f0-9]{7,40}$/i.test(commitSha)) {
+    res.setHeader('X-Deployment-Commit', commitSha);
+  }
+}
+
 function safeRequestId(value, fallback) {
   const candidate = typeof value === 'string' ? value : '';
   return /^[A-Za-z0-9._:-]{1,128}$/.test(candidate) ? candidate : fallback();
@@ -33,6 +39,7 @@ export function createChatHandler({
 } = {}) {
   return async function handler(req, res) {
     setCors(res);
+    exposeDeploymentCommit(res, env.VERCEL_GIT_COMMIT_SHA);
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
