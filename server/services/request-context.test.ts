@@ -23,6 +23,7 @@ describe('request context and temporal facts', () => {
     ['今日は何曜日？', 'current_date', '土曜日'],
     ['今年は何年？', 'current_year', '今年は2026年ばい！'],
     ['今何時？', 'current_time', '2026年7月11日 00:05'],
+    ['今何時か知りたい', 'current_time', '2026年7月11日 00:05'],
   ])('answers %s without model knowledge', (prompt, kind, expected) => {
     const fact = resolveTemporalFact(prompt, context);
     expect(fact?.kind).toBe(kind);

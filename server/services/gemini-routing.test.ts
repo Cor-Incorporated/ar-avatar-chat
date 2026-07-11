@@ -198,6 +198,24 @@ describe('Gemini route orchestration', () => {
     expect(result.text).toContain('公開デモ');
   });
 
+  it('keeps a conversational temporal clause in a mixed Calendar response', async () => {
+    const result = await handleFunctionCalling('key', '今何時か知りたい、あと明日の公開予定を教えて', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.route).toBe('mixed');
+    expect(result.text).toContain('2026年7月11日 15:49（日本時間）');
+    expect(result.text).toContain('公開デモ');
+    expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a conversational temporal clause when refusing unknown company facts', async () => {
+    searchKnowledge.mockReturnValueOnce([]);
+    const result = await handleFunctionCalling('key', '御社の未公開売上を教えて、あと今何時か知りたい', [], [], provider, context, { generate, searchKnowledge });
+    expect(result).toMatchObject({ route: 'mixed', model: 'deterministic' });
+    expect(result.text).toContain('公開知識では確認できんかった');
+    expect(result.text).toContain('2026年7月11日 15:49（日本時間）');
+    expect(generate).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('keeps company plus temporal intent off Calendar', async () => {
     const result = await handleFunctionCalling('key', '会社を紹介して、今何時？', [], [], provider, context, { generate, searchKnowledge });
     expect(result.route).toBe('mixed');

@@ -37,7 +37,7 @@ function temporalParts(context: RequestContext): Omit<TemporalFact, 'kind'> {
 
 export function resolveTemporalFact(prompt: string, context: RequestContext): TemporalFact | null {
   const text = prompt.trim();
-  const suffix = String.raw`(?:ですか|でしょうか|だっけ)?[？?。！!\s]*$`;
+  const suffix = String.raw`(?:ですか|でしょうか|だっけ|か(?:知りたい|教えて(?:ほしい|ください)?|な))?[？?。！!\s]*$`;
   const kind = new RegExp(String.raw`^(?:(?:今|現在)(?:の)?(?:時刻|時間)|(?:今|いま)何時)${suffix}`).test(text)
     ? 'current_time'
     : new RegExp(String.raw`^(?:(?:今年|現在|今)(?:は|の)?何年|西暦何年)${suffix}`).test(text)
