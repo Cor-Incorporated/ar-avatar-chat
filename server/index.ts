@@ -5,8 +5,10 @@ import { handleFunctionCalling } from './services/gemini.service.js';
 import dotenv from 'dotenv';
 import type { ChatRequest, ChatResponse } from './types/chat.types.js';
 import { allowChatRequest, normalizeClientIp } from './services/rate-limit.service.js';
+import { createRequestContext, getGeminiModel } from './services/request-context.service.js';
 
 dotenv.config();
+getGeminiModel(process.env);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,7 +31,13 @@ app.post('/api/chat', async (req: Request<{}, ChatResponse, ChatRequest>, res: R
       return res.status(400).json({ error: 'メッセージまたは画像が必要です' });
     }
 
-    console.log('[API] ユーザーメッセージ:', normalizedMessage || '画像のみ');
+    console.log('[API] 入力メタデータ:', { messageLength: normalizedMessage.length, hasAttachments });
+    let requestContext;
+    try {
+      requestContext = createRequestContext(new Date(), timezone || 'Asia/Tokyo');
+    } catch {
+      return res.status(400).json({ error: '未対応のタイムゾーンです', message: '日本時間で試してね。', emotion: 'sad' });
+    }
 
     const result = await handleFunctionCalling(
       process.env.GEMINI_API_KEY!,
@@ -37,15 +45,15 @@ app.post('/api/chat', async (req: Request<{}, ChatResponse, ChatRequest>, res: R
       attachments || [],
       conversationHistory || [],
       undefined,
-      timezone || 'Asia/Tokyo'
+      requestContext
     );
 
-    console.log('[API] Gemini応答:', result);
+    console.log('[API] 応答メタデータ:', { emotion: result.emotion, hasCalendar: Boolean(result.calendar), hasAction: Boolean(result.action) });
 
     res.json({
       message: result.text,
       emotion: result.emotion,
-      timestamp: new Date(),
+      timestamp: requestContext.now,
       action: result.action,
       calendar: result.calendar
     });
