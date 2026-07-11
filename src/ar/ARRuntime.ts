@@ -161,6 +161,11 @@ export class ARRuntime extends EventTarget {
     this.source.onResizeElement();
     const width = document.documentElement.clientWidth || window.innerWidth;
     const height = document.documentElement.clientHeight || window.innerHeight;
+    // Keep the AR DOM on the stable layout viewport. iOS Safari can recompute
+    // percentage heights while the keyboard changes the visual viewport even
+    // when renderer resize is deferred, which otherwise crops the camera feed.
+    document.documentElement.style.setProperty('--ar-layout-width', `${width}px`);
+    document.documentElement.style.setProperty('--ar-layout-height', `${height}px`);
     this.renderer.setSize(width, height, false);
     if (this.context && this.source.domElement.videoWidth > 0) {
       this.camera.projectionMatrix.copy(this.context.getProjectionMatrix());
@@ -262,5 +267,7 @@ export class ARRuntime extends EventTarget {
     if (this.cameraParametersUrl) URL.revokeObjectURL(this.cameraParametersUrl);
     this.avatar.dispose();
     this.renderer.dispose();
+    document.documentElement.style.removeProperty('--ar-layout-width');
+    document.documentElement.style.removeProperty('--ar-layout-height');
   }
 }
