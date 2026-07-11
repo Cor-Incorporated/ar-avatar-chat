@@ -43,7 +43,7 @@ export interface ChatAPIResponse {
   message: string;
   emotion: EmotionType;
   timestamp: string;
-  action?: { type: 'retry'; reason: string; retryable?: boolean };
+  action?: { type: 'retry'; reason: 'calendar_unavailable'; retryable: boolean };
   calendar?: {
     queriedRange: { start: string; end: string; timezone: string };
     publicEventCount: number;

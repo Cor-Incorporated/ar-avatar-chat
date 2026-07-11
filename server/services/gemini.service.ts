@@ -23,6 +23,14 @@ const SYSTEM = `あなたはCor.Inc.のAIアンバサダー、クラウディア
 事実を推測で補わず、カレンダー情報が与えられた場合は、その公開情報だけに基づいて答えてください。
 カレンダー取得失敗を認証設定の推測に言い換えないでください。`;
 
+export function toPublicCalendarAction(error: unknown): NonNullable<GeminiResponse['action']> {
+  return {
+    type: 'retry',
+    reason: 'calendar_unavailable',
+    retryable: error instanceof CalendarProviderError ? error.retryable : true,
+  };
+}
+
 function historyMessages(history: ConversationHistoryItem[]) {
   return history.filter((turn) => turn.content?.trim()).slice(-20).map((turn) => ({ role: turn.role === 'model' ? 'assistant' as const : 'user' as const, content: turn.content }));
 }
@@ -76,6 +84,6 @@ export async function handleFunctionCalling(
   } catch (error) {
     const code = error instanceof CalendarProviderError ? error.code : 'calendar_unavailable';
     console.warn('[Calendar] query failed', { code, retryable: error instanceof CalendarProviderError && error.retryable });
-    return { text: '今はカレンダーを確認できんかったと。少し時間をおいて、もう一度試してね。', emotion: 'sad', action: { type: 'retry', reason: 'calendar_unavailable' } };
+    return { text: '今はカレンダーを確認できんかったと。少し時間をおいて、もう一度試してね。', emotion: 'sad', action: toPublicCalendarAction(error) };
   }
 }
