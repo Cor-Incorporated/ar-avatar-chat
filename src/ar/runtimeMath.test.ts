@@ -1,6 +1,6 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldKeepAvatarVisible } from './runtimeMath.js';
+import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isChatInputActive, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldKeepAvatarVisible } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -26,6 +26,12 @@ describe('AR runtime math', () => {
     expect(shouldKeepAvatarVisible(true, false, 3500, 3500, false)).toBe(false);
     expect(shouldKeepAvatarVisible(true, false, 3500, 9000, true)).toBe(true);
     expect(shouldKeepAvatarVisible(false, false, 3500, 1000, true)).toBe(false);
+  });
+
+  it('recognizes the novel UI input contract without a CSS state class', () => {
+    expect(isChatInputActive({ id: 'bottom-sheet-input' } as Element, false)).toBe(true);
+    expect(isChatInputActive({ id: 'another-input' } as Element, true)).toBe(true);
+    expect(isChatInputActive({ id: 'another-input' } as Element, false)).toBe(false);
   });
 
   it('centers X/Z and places the feet on the marker plane', () => {
