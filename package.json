@@ -12,6 +12,7 @@
     "type-check:server": "cd server && npm run type-check",
     "type-check:client": "tsc -p src/tsconfig.json --noEmit",
     "test:ar": "vitest run src/ar",
+    "test:api": "vitest run --root . api",
     "validate:vrma": "node scripts/validate-vrma.mjs"
   },
   "keywords": [

@@ -42,6 +42,9 @@ jobs:
       - name: Test AR runtime
         run: npm run test:ar
 
+      - name: Test Vercel API boundary
+        run: npm run test:api
+
       - name: Test server when a real test suite exists
         shell: bash
         run: |
