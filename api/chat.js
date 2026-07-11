@@ -55,6 +55,7 @@ export function createChatHandler({
     const body = req.body || {};
     const baseMetadata = {
       requestId,
+      commitSha: env.VERCEL_GIT_COMMIT_SHA,
       message: body.message,
       attachments: body.attachments,
       conversationHistory: body.conversationHistory,
