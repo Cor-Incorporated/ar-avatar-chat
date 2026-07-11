@@ -7,7 +7,7 @@ import { allowChatRequest, normalizeClientIp } from './rate-limit.service.js';
 import { toPublicCalendarAction, toPublicCalendarFailureResponse } from './gemini.service.js';
 
 describe('calendar intent', () => {
-  it.each(['こんにちは', 'おはようございます！', '会社を紹介して'])('does not route ordinary chat: %s', (message) => expect(isCalendarIntent(message)).toBe(false));
+  it.each(['こんにちは', 'こんにちは！', 'おはようございます！', '会社を紹介して'])('does not route ordinary chat: %s', (message) => expect(isCalendarIntent(message)).toBe(false));
   it.each(['明日の公開予定を教えて', '今週の空き時間は？', '会議のスケジュールを確認して'])('routes explicit calendar requests: %s', (message) => expect(isCalendarIntent(message)).toBe(true));
   it.each(['会議の進め方を教えて', '予約機能を説明して', '予定は未定です', '今後の予定はまだ未定です、詳しくは追ってご連絡します'])('does not route calendar-related ordinary chat: %s', (message) => expect(isCalendarIntent(message)).toBe(false));
   it('normalizes tomorrow in JST', () => {
