@@ -31,6 +31,14 @@ export function toPublicCalendarAction(error: unknown): NonNullable<GeminiRespon
   };
 }
 
+export function toPublicCalendarFailureResponse(error: unknown): GeminiResponse {
+  const action = toPublicCalendarAction(error);
+  const text = action.retryable
+    ? '今はカレンダーを確認できんかったと。少し時間をおいて、もう一度試してね。'
+    : '現在カレンダー連携を利用できません。別の質問を試してね。';
+  return { text, emotion: 'sad', action };
+}
+
 function historyMessages(history: ConversationHistoryItem[]) {
   return history.filter((turn) => turn.content?.trim()).slice(-20).map((turn) => ({ role: turn.role === 'model' ? 'assistant' as const : 'user' as const, content: turn.content }));
 }
@@ -84,6 +92,6 @@ export async function handleFunctionCalling(
   } catch (error) {
     const code = error instanceof CalendarProviderError ? error.code : 'calendar_unavailable';
     console.warn('[Calendar] query failed', { code, retryable: error instanceof CalendarProviderError && error.retryable });
-    return { text: '今はカレンダーを確認できんかったと。少し時間をおいて、もう一度試してね。', emotion: 'sad', action: toPublicCalendarAction(error) };
+    return toPublicCalendarFailureResponse(error);
   }
 }

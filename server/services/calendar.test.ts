@@ -4,7 +4,7 @@ import { calculatePublicAvailability, calendarCacheKey, collectCalendarEvents, c
 import ical from 'node-ical';
 import { CalendarProviderError } from '../types/calendar.types.js';
 import { allowChatRequest, normalizeClientIp } from './rate-limit.service.js';
-import { toPublicCalendarAction } from './gemini.service.js';
+import { toPublicCalendarAction, toPublicCalendarFailureResponse } from './gemini.service.js';
 
 describe('calendar intent', () => {
   it.each(['こんにちは', 'おはようございます！', '会社を紹介して'])('does not route ordinary chat: %s', (message) => expect(isCalendarIntent(message)).toBe(false));
@@ -191,6 +191,20 @@ describe('server safeguards', () => {
     expect(toPublicCalendarAction(new Error('secret'))).toEqual({
       type: 'retry', reason: 'calendar_unavailable', retryable: true,
     });
+  });
+  it('only recommends retrying transient calendar failures', () => {
+    const transient = toPublicCalendarFailureResponse(
+      new CalendarProviderError('calendar_unavailable', 'internal detail', true),
+    );
+    const permanent = toPublicCalendarFailureResponse(
+      new CalendarProviderError('calendar_not_configured', 'internal detail', false),
+    );
+
+    expect(transient.text).toContain('もう一度試して');
+    expect(transient.action?.retryable).toBe(true);
+    expect(permanent.text).toBe('現在カレンダー連携を利用できません。別の質問を試してね。');
+    expect(permanent.text).not.toContain('もう一度');
+    expect(permanent.action?.retryable).toBe(false);
   });
   it('requires all service account settings without leaking values', () => {
     expect(() => loadCalendarEnvironment({})).toThrowError(CalendarProviderError);
