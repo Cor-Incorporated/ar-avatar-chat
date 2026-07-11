@@ -34,6 +34,8 @@ export class ARRuntime extends EventTarget {
   private lastMarkerVisible = false;
   private cameraParametersUrl: string | null = null;
   private keyboardOverlayActive = false;
+  private avatarPoseSafe = false;
+  private safetyCheckCountdown = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     super();
@@ -257,9 +259,18 @@ export class ARRuntime extends EventTarget {
       // avatar directly below this anchor avoids copying stale/decomposed
       // transforms and gives tracking a single source of truth.
       this.markerRoot.updateMatrixWorld(true);
-      this.avatar.root.visible = isObjectSafelyInCameraView(this.avatar.root, this.camera);
+      if (!this.lastMarkerVisible || this.safetyCheckCountdown <= 0) {
+        this.avatar.root.visible = true;
+        this.avatarPoseSafe = isObjectSafelyInCameraView(this.avatar.root, this.camera);
+        this.safetyCheckCountdown = 6;
+      } else {
+        this.safetyCheckCountdown -= 1;
+      }
+      this.avatar.root.visible = this.avatarPoseSafe;
     } else {
-      this.avatar.root.visible = false;
+      this.avatar.root.visible = true;
+      this.avatarPoseSafe = false;
+      this.safetyCheckCountdown = 0;
     }
     if (markerVisible && !this.lastMarkerVisible) {
       this.avatar.ensureIdle();

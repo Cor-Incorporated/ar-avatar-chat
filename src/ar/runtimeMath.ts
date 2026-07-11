@@ -1,4 +1,4 @@
-import { Box3, Camera, Object3D, Vector3 } from 'three';
+import { Box3, Camera, Frustum, Matrix4, Object3D, Vector3 } from 'three';
 
 export const MAX_FRAME_DELTA_SECONDS = 1 / 15;
 
@@ -77,21 +77,13 @@ export function anchorObjectToWorldPoints(object: Object3D, worldPoints: readonl
 export function isObjectSafelyInCameraView(
   object: Object3D,
   camera: Camera,
-  minimumDepth = 0.35,
-  ndcMargin = 1.25,
 ): boolean {
   object.updateWorldMatrix(true, true);
   camera.updateWorldMatrix(true, false);
   const bounds = new Box3().setFromObject(object);
   if (bounds.isEmpty()) return false;
-  const center = bounds.getCenter(new Vector3());
-  const cameraSpace = center.clone().applyMatrix4(camera.matrixWorldInverse);
-  const ndc = center.clone().project(camera);
-  return Number.isFinite(cameraSpace.z)
-    && -cameraSpace.z >= minimumDepth
-    && [ndc.x, ndc.y, ndc.z].every(Number.isFinite)
-    && Math.abs(ndc.x) <= ndcMargin
-    && Math.abs(ndc.y) <= ndcMargin
-    && ndc.z >= -1
-    && ndc.z <= 1;
+  const cameraPosition = camera.getWorldPosition(new Vector3());
+  if (bounds.containsPoint(cameraPosition)) return false;
+  const viewProjection = new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  return new Frustum().setFromProjectionMatrix(viewProjection).intersectsBox(bounds);
 }
