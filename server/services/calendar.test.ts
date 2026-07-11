@@ -13,6 +13,16 @@ describe('calendar intent', () => {
     expect(query.timeMin).toBe('2026-07-11T15:00:00.000Z');
     expect(query.timeMax).toBe('2026-07-12T15:00:00.000Z');
   });
+  it('normalizes next week from JST Monday through the following Monday', () => {
+    const query = normalizeCalendarQuery('来週の予定', new Date('2026-07-10T16:00:00Z'));
+    expect(query.kind).toBe('next_week');
+    expect(query.timeMin).toBe('2026-07-12T15:00:00.000Z');
+    expect(query.timeMax).toBe('2026-07-19T15:00:00.000Z');
+  });
+  it('routes a concrete request even when it mentions a calendar feature', () => {
+    expect(isCalendarIntent('予約機能で明日の予定を確認して')).toBe(true);
+    expect(isCalendarIntent('予約機能を説明して')).toBe(false);
+  });
   it('accepts a Japanese date without a year and rejects an impossible date', () => {
     const query = normalizeCalendarQuery('7月15日の予定', new Date('2026-07-10T00:00:00Z'));
     expect(query.timeMin).toBe('2026-07-14T15:00:00.000Z');

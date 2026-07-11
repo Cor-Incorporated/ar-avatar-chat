@@ -4,7 +4,7 @@ import { CalendarProviderError } from '../types/calendar.types.js';
 const CALENDAR_WORDS = /(?:カレンダー|予定|スケジュール|空き(?:時間)?|空いて|予約)/;
 const MEETING_REQUEST = /(?:会議|打ち合わせ).*(?:いつ|今日|明日|今週|来週|時間|確認|予定|スケジュール|空き|ある|入って)/;
 const GREETING_ONLY = /^(?:こんにちは|こんばんは|おはよう(?:ございます)?|やあ|はじめまして|お疲れさま(?:です)?)[！!。\s]*$/;
-const NON_CALENDAR_STATEMENT = /(?:予定という|予定は未定|スケジュール管理の方法|予約機能|カレンダー機能)/;
+const NON_CALENDAR_STATEMENT = /^(?:予定という.*|予定は未定(?:です)?|スケジュール管理の方法.*|(?:予約機能|カレンダー機能)(?:について)?(?:を)?(?:説明|紹介)して(?:ください)?)[。！!\s]*$/;
 
 export function isCalendarIntent(message: string): boolean {
   const text = message.trim();
@@ -42,6 +42,12 @@ export function normalizeCalendarQuery(message: string, now = new Date(), timezo
     start = jstMidnightUtc(explicitYear, explicitMonth, explicitDay);
     end = new Date(start.getTime() + 86_400_000);
     kind = 'explicit_range';
+  } else if (/来週/.test(message)) {
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
+    start = new Date(start.getTime() + (7 - daysSinceMonday) * 86_400_000);
+    end = new Date(start.getTime() + 7 * 86_400_000);
+    kind = 'next_week';
   } else if (/明日/.test(message)) {
     start = new Date(start.getTime() + 86_400_000);
     end = new Date(start.getTime() + 86_400_000);

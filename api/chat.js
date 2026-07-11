@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       console.error('[API] インポートエラー詳細:', importError.message, importError.stack);
       res.status(500).json({
         error: 'サーバー初期化エラー',
-        message: `サーバーの準備中です: ${importError.message}`,
+        message: 'サーバーの準備中です。少し時間をおいて再試行してください。',
         emotion: 'sad'
       });
       return;
