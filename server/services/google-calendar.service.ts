@@ -250,11 +250,26 @@ export class PrivateIcalCalendarProvider implements CalendarProvider {
   }
 }
 
-export function createCalendarProvider(env: NodeJS.ProcessEnv = process.env): CalendarProvider {
+let defaultCalendarProvider: CalendarProvider | null = null;
+
+export function createCalendarProvider(env: NodeJS.ProcessEnv = process.env, fetcher: typeof fetch = fetch): CalendarProvider {
+  const useProcessEnvironment = env === process.env;
+  if (useProcessEnvironment && defaultCalendarProvider) return defaultCalendarProvider;
   const icalConfig = loadIcalEnvironment(env);
-  if (icalConfig) return new PrivateIcalCalendarProvider(icalConfig);
-  if (env.VITE_GOOGLE_CALENDAR_ICAL_URL) console.warn('[Calendar] VITE_GOOGLE_CALENDAR_ICAL_URL is deprecated; migrate it to server-only GOOGLE_CALENDAR_ICAL_URL');
-  return new GoogleServiceAccountCalendarProvider(loadCalendarEnvironment(env));
+  let provider: CalendarProvider;
+  if (icalConfig) {
+    provider = new PrivateIcalCalendarProvider(icalConfig, fetcher);
+  } else {
+    if (env.VITE_GOOGLE_CALENDAR_ICAL_URL) console.warn('[Calendar] VITE_GOOGLE_CALENDAR_ICAL_URL is deprecated; migrate it to server-only GOOGLE_CALENDAR_ICAL_URL');
+    provider = new GoogleServiceAccountCalendarProvider(loadCalendarEnvironment(env));
+  }
+  if (useProcessEnvironment) defaultCalendarProvider = provider;
+  return provider;
+}
+
+/** @internal テスト間でprocess.env singletonを分離するためだけに使用する。 */
+export function resetDefaultCalendarProviderForTesting(): void {
+  defaultCalendarProvider = null;
 }
 
 export function calendarCacheKey(config: CalendarEnvironment, query: CalendarQuery): string {
