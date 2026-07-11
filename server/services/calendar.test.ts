@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isCalendarIntent, normalizeCalendarQuery } from './calendar-intent.service.js';
-import { calculatePublicAvailability, calendarCacheKey, collectCalendarEvents, createCalendarProvider, expandIcalEvents, extractPublicDescription, loadCalendarEnvironment, loadIcalEnvironment, PrivateIcalCalendarProvider, sanitizePublicEvent } from './google-calendar.service.js';
+import { calculatePublicAvailability, calendarCacheKey, collectCalendarEvents, createCalendarProvider, expandIcalEvents, extractPublicDescription, loadCalendarEnvironment, loadIcalEnvironment, PrivateIcalCalendarProvider, resetDefaultCalendarProviderForTesting, sanitizePublicEvent } from './google-calendar.service.js';
 import ical from 'node-ical';
 import { CalendarProviderError } from '../types/calendar.types.js';
 import { allowChatRequest, normalizeClientIp } from './rate-limit.service.js';
@@ -140,6 +140,29 @@ END:VCALENDAR`;
     expect(config?.url).toBe('https://calendar.example.test/private.ics');
     expect(createCalendarProvider({ GOOGLE_CALENDAR_ICAL_URL: 'https://calendar.example.test/private.ics', VITE_GOOGLE_CALENDAR_ICAL_URL: 'https://legacy.invalid/secret.ics' })).toBeInstanceOf(PrivateIcalCalendarProvider);
     expect(() => createCalendarProvider({ VITE_GOOGLE_CALENDAR_ICAL_URL: 'https://legacy.invalid/secret.ics' })).toThrowError(CalendarProviderError);
+  });
+
+  it('reuses the process-env provider and its cache across factory calls', async () => {
+    const previous = process.env.GOOGLE_CALENDAR_ICAL_URL;
+    process.env.GOOGLE_CALENDAR_ICAL_URL = 'https://calendar.example.test/private.ics';
+    resetDefaultCalendarProviderForTesting();
+    let fetchCount = 0;
+    const fetcher = async () => {
+      fetchCount += 1;
+      return new Response(fixture, { status: 200, headers: { 'content-type': 'text/calendar' } });
+    };
+    try {
+      const first = createCalendarProvider(process.env, fetcher as typeof fetch);
+      await first.query(query);
+      const second = createCalendarProvider(process.env, fetcher as typeof fetch);
+      await second.query(query);
+      expect(second).toBe(first);
+      expect(fetchCount).toBe(1);
+    } finally {
+      resetDefaultCalendarProviderForTesting();
+      if (previous === undefined) delete process.env.GOOGLE_CALENDAR_ICAL_URL;
+      else process.env.GOOGLE_CALENDAR_ICAL_URL = previous;
+    }
   });
 });
 
