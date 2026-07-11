@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isCalendarIntent, normalizeCalendarQuery } from './calendar-intent.service.js';
-import { calculatePublicAvailability, calendarCacheKey, collectCalendarEvents, extractPublicDescription, loadCalendarEnvironment, sanitizePublicEvent } from './google-calendar.service.js';
+import { calculatePublicAvailability, calendarCacheKey, collectCalendarEvents, createCalendarProvider, expandIcalEvents, extractPublicDescription, loadCalendarEnvironment, loadIcalEnvironment, PrivateIcalCalendarProvider, sanitizePublicEvent } from './google-calendar.service.js';
+import ical from 'node-ical';
 import { CalendarProviderError } from '../types/calendar.types.js';
 import { allowChatRequest, normalizeClientIp } from './rate-limit.service.js';
 import { toPublicCalendarAction } from './gemini.service.js';
@@ -94,6 +95,51 @@ describe('public boundary', () => {
     const base = { clientEmail: 'reader', privateKey: 'key', calendarId: 'calendar-a', timezone: 'Asia/Tokyo', publicPrefix: '[公開]', businessStart: '09:00', businessEnd: '18:00' };
     expect(calendarCacheKey(base, query)).not.toBe(calendarCacheKey({ ...base, calendarId: 'calendar-b' }, query));
     expect(calendarCacheKey(base, query)).not.toBe(calendarCacheKey({ ...base, publicPrefix: '[外部]' }, query));
+  });
+});
+
+describe('private iCal provider', () => {
+  const fixture = `BEGIN:VCALENDAR\r
+VERSION:2.0\r
+PRODID:-//Cor//Calendar Test//JA\r
+BEGIN:VEVENT\r
+UID:public-recurring\r
+DTSTART;TZID=Asia/Tokyo:20260713T100000\r
+DTEND;TZID=Asia/Tokyo:20260713T110000\r
+RRULE:FREQ=DAILY;COUNT=2\r
+SUMMARY:[公開] 相談会\r
+DESCRIPTION:内部情報\\n[公開説明]\\n一般公開です\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:private-all-day\r
+DTSTART;VALUE=DATE:20260714\r
+DTEND;VALUE=DATE:20260715\r
+SUMMARY:社内休業\r
+END:VEVENT\r
+END:VCALENDAR`;
+  const query = { kind: 'this_week', timeMin: '2026-07-12T15:00:00.000Z', timeMax: '2026-07-19T15:00:00.000Z', timezone: 'Asia/Tokyo', availabilityRequested: true } as const;
+
+  it('expands recurrence and preserves all-day boundaries', async () => {
+    const events = expandIcalEvents(await ical.async.parseICS(fixture), query);
+    expect(events.filter((event) => event.summary === '[公開] 相談会')).toHaveLength(2);
+    expect(events.find((event) => event.summary === '社内休業')).toMatchObject({ start: { date: '2026-07-14' }, end: { date: '2026-07-15' } });
+  });
+
+  it('applies the shared publication and free-slot boundary to fetched ICS', async () => {
+    const fetcher = async () => new Response(fixture, { status: 200, headers: { 'content-type': 'text/calendar' } });
+    const provider = new PrivateIcalCalendarProvider({ url: 'https://calendar.example.test/private.ics', timezone: 'Asia/Tokyo', publicPrefix: '[公開]', businessStart: '09:00', businessEnd: '18:00' }, fetcher as typeof fetch);
+    const result = await provider.query(query);
+    expect(result.events).toHaveLength(2);
+    expect(result.events[0]).toMatchObject({ title: '相談会', publicDescription: '一般公開です' });
+    expect(JSON.stringify(result)).not.toContain('社内休業');
+    expect(result.availability?.free.length).toBeGreaterThan(0);
+  });
+
+  it('prefers the server-only iCal URL and never uses the legacy VITE value as a provider URL', () => {
+    const config = loadIcalEnvironment({ GOOGLE_CALENDAR_ICAL_URL: 'https://calendar.example.test/private.ics' });
+    expect(config?.url).toBe('https://calendar.example.test/private.ics');
+    expect(createCalendarProvider({ GOOGLE_CALENDAR_ICAL_URL: 'https://calendar.example.test/private.ics', VITE_GOOGLE_CALENDAR_ICAL_URL: 'https://legacy.invalid/secret.ics' })).toBeInstanceOf(PrivateIcalCalendarProvider);
+    expect(() => createCalendarProvider({ VITE_GOOGLE_CALENDAR_ICAL_URL: 'https://legacy.invalid/secret.ics' })).toThrowError(CalendarProviderError);
   });
 });
 
