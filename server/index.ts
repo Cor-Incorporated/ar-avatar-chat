@@ -8,6 +8,7 @@ import { allowChatRequest, normalizeClientIp } from './services/rate-limit.servi
 import { createRequestContext, getGeminiModel } from './services/request-context.service.js';
 
 dotenv.config();
+// Standalone serverはリクエスト受付前にモデル設定不備を検出する。
 getGeminiModel(process.env);
 
 const app = express();

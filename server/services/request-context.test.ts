@@ -31,6 +31,7 @@ describe('request context and temporal facts', () => {
 
   it('does not intercept unrelated conversation', () => {
     expect(resolveTemporalFact('こんにちは', context)).toBeNull();
+    expect(resolveTemporalFact('今日は何日ですか？ あと明日の予定も教えて', context)).toBeNull();
   });
 
   it('overrides stale conversation history without calling Gemini', async () => {

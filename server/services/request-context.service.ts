@@ -33,11 +33,12 @@ function temporalParts(context: RequestContext): Omit<TemporalFact, 'kind'> {
 
 export function resolveTemporalFact(prompt: string, context: RequestContext): TemporalFact | null {
   const text = prompt.trim();
-  const kind = /(?:今|現在)(?:の)?(?:時刻|時間)|(?:今|いま)何時/.test(text)
+  const suffix = String.raw`(?:ですか|でしょうか|だっけ)?[？?。！!\s]*$`;
+  const kind = new RegExp(String.raw`^(?:(?:今|現在)(?:の)?(?:時刻|時間)|(?:今|いま)何時)${suffix}`).test(text)
     ? 'current_time'
-    : /(?:今年|現在|今)(?:は|の)?何年|西暦何年/.test(text)
+    : new RegExp(String.raw`^(?:(?:今年|現在|今)(?:は|の)?何年|西暦何年)${suffix}`).test(text)
       ? 'current_year'
-      : /(?:今日|本日)(?:は|の)?(?:何日|日付)|今日はいつ/.test(text)
+      : new RegExp(String.raw`^(?:(?:今日|本日)(?:は|の)?(?:何日|日付)|今日はいつ)${suffix}`).test(text)
         ? 'current_date'
         : null;
   return kind ? { kind, ...temporalParts(context) } : null;
@@ -52,6 +53,6 @@ export function temporalFactResponse(fact: TemporalFact): GeminiResponse {
 }
 
 export function buildCurrentTimeInstruction(context: RequestContext): string {
-  const fact = { kind: 'current_date' as const, ...temporalParts(context) };
-  return `現在日時は${fact.year}年${fact.month}月${fact.day}日${String(fact.hour).padStart(2, '0')}:${String(fact.minute).padStart(2, '0')}（${context.timezone}）です。日時については会話履歴やモデル知識ではなく、この値だけを根拠にしてください。`;
+  const parts = temporalParts(context);
+  return `現在日時は${parts.year}年${parts.month}月${parts.day}日${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}（${context.timezone}）です。日時については会話履歴やモデル知識ではなく、この値だけを根拠にしてください。`;
 }
