@@ -130,6 +130,27 @@ describe('Gemini route orchestration', () => {
     expect(JSON.stringify(result)).not.toContain('secret@example.com');
   });
 
+  it('keeps unknown company facts out of a mixed Calendar model prompt', async () => {
+    searchKnowledge.mockReturnValueOnce([]);
+    const result = await handleFunctionCalling('key', '御社の未公開売上を教えて、あと明日の公開予定も教えて', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.route).toBe('mixed');
+    expect(query).toHaveBeenCalledOnce();
+    const finalCall = calls[calls.length - 1];
+    expect(finalCall.messages[finalCall.messages.length - 1].content).toBe('明日の公開予定も教えて');
+    expect(JSON.stringify(finalCall)).not.toContain('未公開売上');
+    expect(finalCall.system).toContain('登録済み公開知識で確認できない');
+  });
+
+  it('answers unknown company plus current time without a model or Calendar', async () => {
+    searchKnowledge.mockReturnValueOnce([]);
+    const result = await handleFunctionCalling('key', '御社の未公開売上を教えて、あと今何時？', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.model).toBe('deterministic');
+    expect(result.text).toContain('公開知識では確認できんかった');
+    expect(result.text).toContain('2026年7月11日、土曜日、15:49');
+    expect(generate).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('answers a Calendar FAQ from knowledge without querying Calendar', async () => {
     searchKnowledge.mockReturnValueOnce([{
       entry: {

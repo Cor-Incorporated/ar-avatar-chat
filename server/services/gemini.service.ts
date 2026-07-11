@@ -5,7 +5,7 @@ import type { CalendarProvider, CalendarResult } from '../types/calendar.types.j
 import { CalendarProviderError } from '../types/calendar.types.js';
 import { normalizeCalendarQuery } from './calendar-intent.service.js';
 import { createCalendarProvider } from './google-calendar.service.js';
-import { classifyIntentRoute } from './intent-route.service.js';
+import { classifyIntentRoute, splitIntentClauses } from './intent-route.service.js';
 import { normalizeKnowledgeText, searchPublicKnowledge } from './knowledge.service.js';
 import { KNOWLEDGE_SOURCES } from '../knowledge/index.js';
 import { buildCurrentTimeInstruction, createRequestContext, getGeminiModel, resolveTemporalFact, temporalFactResponse } from './request-context.service.js';
@@ -116,7 +116,10 @@ export async function handleFunctionCalling(
     reviewedAt: [...new Set(knowledgeResults.map(({ entry }) => entry.reviewedAt))].sort(),
   } : undefined;
   const companyOverview = knowledgeResults.find(({ entry }) => entry.id === 'company.identity')?.entry;
-  if (route === 'company' && exactKnowledgeQuestion && companyOverview) {
+  const companyOverviewExact = companyOverview
+    ? [companyOverview.title, ...companyOverview.aliases].some((candidate) => normalizeKnowledgeText(candidate) === normalizedPrompt)
+    : false;
+  if (route === 'company' && companyOverviewExact && companyOverview) {
     return {
       text: companyOverview.answer,
       emotion: 'neutral', route, model: 'deterministic', knowledge,
@@ -125,6 +128,13 @@ export async function handleFunctionCalling(
   if (route === 'company' && !knowledgeResults.length) {
     return {
       text: 'その会社情報は、登録済みの公開知識では確認できんかったと。確認できない内容は推測して案内できんとよ。',
+      emotion: 'neutral', route, model: 'deterministic',
+    };
+  }
+  const unknownCompanyInMixed = route === 'mixed' && intent.signals.includes('company') && !knowledgeResults.length;
+  if (unknownCompanyInMixed && !needsCalendar) {
+    return {
+      text: `その会社情報は登録済みの公開知識では確認できんかったと。${buildCurrentTimeInstruction(context)}`,
       emotion: 'neutral', route, model: 'deterministic',
     };
   }
@@ -150,7 +160,13 @@ export async function handleFunctionCalling(
     });
     calendarResult = execution.toolResults[0]?.output as CalendarResult | undefined;
     if (!calendarResult) calendarResult = await calendarProvider.query(query);
-    const response = await renderResponse(apiKey, userPrompt, attachments, conversationHistory, context, calendarResult, knowledgeText, deps);
+    const safePrompt = unknownCompanyInMixed
+      ? splitIntentClauses(userPrompt).filter((clause) => classifyIntentRoute(clause).signals.includes('calendar')).join('、')
+      : userPrompt;
+    const safeKnowledgeText = unknownCompanyInMixed
+      ? '会社情報は登録済み公開知識で確認できないため推測せず、その旨を明示してください。'
+      : knowledgeText;
+    const response = await renderResponse(apiKey, safePrompt, attachments, conversationHistory, context, calendarResult, safeKnowledgeText, deps);
     return { ...response, route, knowledge, calendar: { queriedRange: calendarResult.queriedRange, publicEventCount: calendarResult.events.length, availabilityProvided: Boolean(calendarResult.availability) } };
   } catch (error) {
     const code = error instanceof CalendarProviderError ? error.code : 'calendar_unavailable';

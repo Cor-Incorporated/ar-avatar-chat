@@ -48,4 +48,11 @@ describe('intent route classifier', () => {
       signals: ['calendar', 'temporal'],
     });
   });
+
+  it.each([
+    '会社の今後の予定を教えて、あと来週の公開イベントを教えて',
+    'デモを予約したい、あと来週の公開予定を教えて',
+  ])('keeps an explicit Calendar clause despite suppression words elsewhere: %s', (message) => {
+    expect(classifyIntentRoute(message).signals).toContain('calendar');
+  });
 });
