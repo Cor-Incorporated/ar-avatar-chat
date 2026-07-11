@@ -23,7 +23,7 @@ export interface PublicCalendarEvent {
 }
 
 export interface CalendarAvailability {
-  busy: Array<{ start: string; end: string }>;
+  free: Array<{ start: string; end: string }>;
 }
 
 export interface CalendarResult {
