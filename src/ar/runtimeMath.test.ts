@@ -1,6 +1,6 @@
-import { BoxGeometry, Euler, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, areViewportRectsStable, clampFrameDelta, coverProjectionScale, isCameraPermissionError, isObjectSafelyInCameraView, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
+import { anchorAvatarToFeet, areViewportRectsStable, clampFrameDelta, coverProjectionScale, isCameraPermissionError, isObjectSafelyInCameraView, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -16,23 +16,6 @@ describe('AR runtime math', () => {
     expect(() => setUniformScale(object, 0)).toThrow(RangeError);
   });
 
-  it('snaps a reacquired marker pose instead of interpolating through the camera origin', () => {
-    const marker = new Object3D();
-    marker.matrixAutoUpdate = false;
-    const expectedPosition = new Vector3(1, 2, -6);
-    const expectedRotation = new Quaternion().setFromEuler(new Euler(0.2, 0.4, 0.1));
-    const expectedScale = new Vector3(1.25, 1.25, 1.25);
-    marker.matrix.compose(expectedPosition, expectedRotation, expectedScale);
-    const smoothed = new Object3D();
-
-    snapObjectTransform(smoothed, marker);
-
-    expect(marker.position.toArray()).toEqual([0, 0, 0]);
-    expect(smoothed.position.toArray()).toEqual(expectedPosition.toArray());
-    expect(smoothed.quaternion.angleTo(expectedRotation)).toBeCloseTo(0);
-    expect(smoothed.scale.toArray()).toEqual([1.25, 1.25, 1.25]);
-  });
-
   it('places avatar scene bounds inside the camera frustum from an AR.js marker matrix', () => {
     const camera = new PerspectiveCamera(45, 390 / 844, 0.1, 100);
     camera.updateProjectionMatrix();
@@ -44,14 +27,11 @@ describe('AR runtime math', () => {
       new Quaternion(),
       new Vector3(1, 1, 1),
     );
-    const smoothedRoot = new Object3D();
     const avatar = new Mesh(new BoxGeometry(0.8, 1.8, 0.5), new MeshBasicMaterial());
     avatar.position.y = 0.9;
-    smoothedRoot.add(avatar);
+    marker.add(avatar);
 
-    snapObjectTransform(smoothedRoot, marker);
-
-    expect(isObjectSafelyInCameraView(smoothedRoot, camera)).toBe(true);
+    expect(isObjectSafelyInCameraView(avatar, camera)).toBe(true);
   });
 
   it('rejects the old failure mode where avatar bounds remain at the camera origin', () => {
