@@ -14,8 +14,12 @@ describe('intent route classifier', () => {
     expect(classifyIntentRoute(message).route).toBe('temporal');
   });
 
-  it.each(['会社を紹介して', 'Cor.Incの事業内容は？', 'Cor Incについて教えて', '御社の代表者と所在地を教えて'])('routes company facts: %s', (message) => {
+  it.each(['会社を紹介して', 'Cor.Incの事業内容は？', 'Cor Incについて教えて', 'コアインクについて教えて', '御社の代表者と所在地を教えて'])('routes company facts: %s', (message) => {
     expect(classifyIntentRoute(message).route).toBe('company');
+  });
+
+  it.each(['友達の会社のサービスについて教えて', '転職先の会社の福利厚生について教えて', 'このサブスクリプションサービスって解約できますか？'])('does not claim unrelated company questions: %s', (message) => {
+    expect(classifyIntentRoute(message)).toEqual({ route: 'ordinary', signals: [] });
   });
 
   it.each(['明日の公開予定を教えて', '今週の空き時間は？'])('routes explicit calendar queries: %s', (message) => {
