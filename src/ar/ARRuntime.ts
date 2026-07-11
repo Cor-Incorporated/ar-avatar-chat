@@ -79,6 +79,7 @@ export class ARRuntime extends EventTarget {
     this.context = new ArToolkitContext({
       cameraParametersUrl: this.cameraParametersUrl,
       detectionMode: 'mono',
+      labelingMode: 'black_region',
       patternRatio: 0.8,
       maxDetectionRate: 60,
       canvasWidth: 1280,

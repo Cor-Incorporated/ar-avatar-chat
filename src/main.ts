@@ -1,4 +1,5 @@
 import { ARRuntime } from './ar/ARRuntime.js';
+import { isCameraPermissionError } from './ar/runtimeMath.js';
 import { ChatController } from './controllers/ChatController.js';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#ar-canvas');
@@ -27,7 +28,7 @@ runtime.addEventListener('cameraready', () => {
 runtime.start().catch((error: unknown) => {
   console.error('[AR] initialization failed', error);
   runtime.dispose();
-  status.textContent = error instanceof Error && /permission|denied|NotAllowed/i.test(error.message)
+  status.textContent = isCameraPermissionError(error)
     ? '📷 カメラへのアクセスを許可してください'
     : '❌ ARの初期化に失敗しました';
 });

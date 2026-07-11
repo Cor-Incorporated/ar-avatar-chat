@@ -37,6 +37,13 @@ export function isChatInputActive(activeElement: Pick<Element, 'id'> | null, exp
   return explicitlyActive || activeElement?.id === 'bottom-sheet-input';
 }
 
+export function isCameraPermissionError(error: unknown): boolean {
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
+    if (error.name === 'NotAllowedError' || error.name === 'SecurityError') return true;
+  }
+  return error instanceof Error && /permission|denied|NotAllowed/i.test(error.message);
+}
+
 export function setUniformScale(object: Object3D, scale: number): void {
   if (!Number.isFinite(scale) || scale <= 0) {
     throw new RangeError('Avatar scale must be a positive finite number');
