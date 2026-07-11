@@ -17,6 +17,16 @@ const PUBLIC_RETRY_REASONS = new Set([
   'invalid_calendar_range',
 ]);
 
+function nonRetryableMessage(reason: string): string {
+  if (reason === 'calendar_not_configured') {
+    return 'カレンダー連携は現在利用できません。管理者に確認してください。';
+  }
+  if (reason === 'invalid_calendar_range') {
+    return '指定した期間を確認して、質問を変えてください。';
+  }
+  return 'この内容では再試行できません。質問を変えてください。';
+}
+
 export class ChatController {
   private bottomSheet: BottomSheet;
   private apiEndpoint: string;
@@ -72,7 +82,11 @@ export class ChatController {
       if (data.action?.type === 'retry') {
         const reason = PUBLIC_RETRY_REASONS.has(data.action.reason) ? data.action.reason : 'unknown';
         console.warn('[Chat Controller] Retry requested', { reason });
-        this.bottomSheet.showError('カレンダー情報を取得できませんでした。', () => void this.sendMessage(payload));
+        if (data.action.retryable === false) {
+          this.bottomSheet.showError(nonRetryableMessage(reason));
+        } else {
+          this.bottomSheet.showError('カレンダー情報を取得できませんでした。', () => void this.sendMessage(payload));
+        }
       } else {
         this.bottomSheet.clearError();
       }

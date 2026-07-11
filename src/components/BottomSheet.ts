@@ -13,6 +13,8 @@ import type {
   MessageSendPayload,
 } from '../types/chat.types.js';
 
+const MAX_STORED_MESSAGES = 50;
+
 export class BottomSheet {
   private container: HTMLElement | null = null;
   private messagesContainer: HTMLElement | null = null;
@@ -367,6 +369,9 @@ export class BottomSheet {
 
   public addMessage(role: 'user' | 'assistant', content: string): void {
     this.messages.push({ role, content, timestamp: new Date() });
+    if (this.messages.length > MAX_STORED_MESSAGES) {
+      this.messages.splice(0, this.messages.length - MAX_STORED_MESSAGES);
+    }
     const wasCollapsed = this.state === 'collapsed';
     if (wasCollapsed) this.state = 'peek';
     this.updateStateClass();
