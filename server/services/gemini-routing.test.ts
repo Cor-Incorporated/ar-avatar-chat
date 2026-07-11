@@ -112,7 +112,7 @@ describe('Gemini route orchestration', () => {
   it('returns deterministic empty Calendar facts', async () => {
     query.mockResolvedValueOnce({ events: [], queriedRange: calendarResult.queriedRange });
     const result = await handleFunctionCalling('key', '明日の公開予定を教えて', [], [], provider, context, { generate, searchKnowledge });
-    expect(result.text).toContain('公開予定はありません');
+    expect(result.text).toContain('公開予定はなかとよ');
     expect(query).toHaveBeenCalledOnce();
     expect(calls).toHaveLength(1);
   });
@@ -126,6 +126,23 @@ describe('Gemini route orchestration', () => {
     expect(result.text).toContain('空き時間は7月12日 10:00〜7月12日 11:30');
     expect(result.calendar?.availabilityProvided).toBe(true);
     expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('reports no free time when availability is present with an empty free list', async () => {
+    query.mockResolvedValueOnce({
+      events: [], availability: { free: [] }, queriedRange: calendarResult.queriedRange,
+    });
+    const result = await handleFunctionCalling('key', '今週の空き時間を教えて', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.text).toContain('確認期間に空き時間はなかとよ');
+    expect(result.calendar?.availabilityProvided).toBe(true);
+    expect(query).toHaveBeenCalledOnce();
+  });
+
+  it.each(['明日の公開予定を教えて', '今週の空き時間を教えて'])('keeps deterministic Calendar wording natural: %s', async (message) => {
+    query.mockResolvedValueOnce({ events: [], availability: /空き/.test(message) ? { free: [] } : undefined, queriedRange: calendarResult.queriedRange });
+    const result = await handleFunctionCalling('key', message, [], [], provider, context, { generate, searchKnowledge });
+    expect(result.text).not.toContain('です。ばい');
+    expect(result.text).not.toContain('ばい！ばい');
   });
 
   it('combines knowledge and Calendar facts for mixed intent', async () => {
