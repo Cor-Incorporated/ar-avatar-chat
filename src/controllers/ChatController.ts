@@ -9,6 +9,14 @@ interface AvatarEmotionController {
   playEmotion(emotion: string): void;
 }
 
+const PUBLIC_RETRY_REASONS = new Set([
+  'calendar_not_configured',
+  'calendar_unauthorized',
+  'calendar_unavailable',
+  'calendar_rate_limited',
+  'invalid_calendar_range',
+]);
+
 export class ChatController {
   private bottomSheet: BottomSheet;
   private apiEndpoint: string;
@@ -62,6 +70,8 @@ export class ChatController {
       // アシスタントのメッセージを追加
       this.bottomSheet.addMessage('assistant', data.message);
       if (data.action?.type === 'retry') {
+        const reason = PUBLIC_RETRY_REASONS.has(data.action.reason) ? data.action.reason : 'unknown';
+        console.warn('[Chat Controller] Retry requested', { reason });
         this.bottomSheet.showError('カレンダー情報を取得できませんでした。', () => void this.sendMessage(payload));
       } else {
         this.bottomSheet.clearError();
