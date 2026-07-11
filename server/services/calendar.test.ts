@@ -13,6 +13,9 @@ describe('calendar intent', () => {
     expect(query.timeMin).toBe('2026-07-11T15:00:00.000Z');
     expect(query.timeMax).toBe('2026-07-12T15:00:00.000Z');
   });
+  it('rejects non-Tokyo request timezones instead of silently coercing them', () => {
+    expect(() => normalizeCalendarQuery('明日の予定', new Date(), 'UTC')).toThrowError('Calendar timezone must be Asia/Tokyo');
+  });
   it('normalizes next week from JST Monday through the following Monday', () => {
     const query = normalizeCalendarQuery('来週の予定', new Date('2026-07-10T16:00:00Z'));
     expect(query.kind).toBe('next_week');
@@ -90,6 +93,14 @@ describe('public boundary', () => {
 describe('server safeguards', () => {
   it('requires all service account settings without leaking values', () => {
     expect(() => loadCalendarEnvironment({})).toThrowError(CalendarProviderError);
+  });
+  it('rejects non-Tokyo calendar configuration with a timezone-specific error', () => {
+    expect(() => loadCalendarEnvironment({
+      GOOGLE_CALENDAR_CLIENT_EMAIL: 'reader@example.test',
+      GOOGLE_CALENDAR_PRIVATE_KEY: 'private-key',
+      GOOGLE_CALENDAR_ID: 'calendar@example.test',
+      GOOGLE_CALENDAR_TIMEZONE: 'UTC',
+    })).toThrowError('GOOGLE_CALENDAR_TIMEZONE must be Asia/Tokyo');
   });
   it('validates and accepts configurable business hours', () => {
     const config = loadCalendarEnvironment({

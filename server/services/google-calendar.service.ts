@@ -23,7 +23,10 @@ export function loadCalendarEnvironment(env: NodeJS.ProcessEnv = process.env): C
   const timezone = env.GOOGLE_CALENDAR_TIMEZONE?.trim() || 'Asia/Tokyo';
   const businessStart = env.GOOGLE_CALENDAR_BUSINESS_START?.trim() || '09:00';
   const businessEnd = env.GOOGLE_CALENDAR_BUSINESS_END?.trim() || '18:00';
-  if (timezone !== 'Asia/Tokyo' || !TIME_PATTERN.test(businessStart) || !TIME_PATTERN.test(businessEnd) || businessStart >= businessEnd) {
+  if (timezone !== 'Asia/Tokyo') {
+    throw new CalendarProviderError('calendar_not_configured', 'GOOGLE_CALENDAR_TIMEZONE must be Asia/Tokyo');
+  }
+  if (!TIME_PATTERN.test(businessStart) || !TIME_PATTERN.test(businessEnd) || businessStart >= businessEnd) {
     throw new CalendarProviderError('calendar_not_configured', 'Calendar business hours configuration is invalid');
   }
   return { clientEmail, privateKey, calendarId, timezone, publicPrefix: env.GOOGLE_CALENDAR_PUBLIC_PREFIX || '[公開]', businessStart, businessEnd };
