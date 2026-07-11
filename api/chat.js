@@ -28,23 +28,32 @@ export default async function handler(req, res) {
     console.log('[API] 履歴ターン数:', Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory.length : 0);
     
     // 動的インポート（Vercel環境用）
-    let handleFunctionCalling;
+    let handleFunctionCalling, allowChatRequest, normalizeClientIp;
     try {
       console.log('[API] Geminiサービスをインポート中...');
       const module = await import('../server/dist/services/gemini.service.js');
       handleFunctionCalling = module.handleFunctionCalling;
+      ({ allowChatRequest, normalizeClientIp } = await import('../server/dist/services/rate-limit.service.js'));
       console.log('[API] インポート成功');
     } catch (importError) {
       console.error('[API] インポートエラー詳細:', importError.message, importError.stack);
       res.status(500).json({
         error: 'サーバー初期化エラー',
-        message: `サーバーの準備中です: ${importError.message}`,
+        message: 'サーバーの準備中です。少し時間をおいて再試行してください。',
         emotion: 'sad'
       });
       return;
     }
     
-    const { message, oauthToken, attachments, conversationHistory } = req.body;
+    const { message, timezone, attachments, conversationHistory } = req.body;
+    const clientKey = normalizeClientIp(req.headers['x-vercel-forwarded-for'])
+      || normalizeClientIp(req.headers['x-forwarded-for'])
+      || normalizeClientIp(req.socket?.remoteAddress)
+      || 'unknown';
+    if (!allowChatRequest(clientKey)) {
+      res.status(429).json({ error: 'リクエストが多すぎます', message: '少し時間をおいて試してね。', emotion: 'sad' });
+      return;
+    }
     const normalizedMessage = typeof message === 'string' ? message.trim() : '';
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
@@ -68,9 +77,10 @@ export default async function handler(req, res) {
     const result = await handleFunctionCalling(
       process.env.GEMINI_API_KEY,
       normalizedMessage,
-      oauthToken || null,
       attachments || [],
-      conversationHistory || []
+      conversationHistory || [],
+      undefined,
+      timezone || 'Asia/Tokyo'
     );
 
     console.log('[API] Gemini応答:', result);
@@ -78,7 +88,9 @@ export default async function handler(req, res) {
     res.status(200).json({
       message: result.text,
       emotion: result.emotion,
-      timestamp: new Date()
+      timestamp: new Date(),
+      action: result.action,
+      calendar: result.calendar
     });
 
   } catch (error) {

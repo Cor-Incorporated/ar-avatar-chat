@@ -196,6 +196,13 @@ npm run build
 npm start
 ```
 
+Calendarはserver-onlyの`GOOGLE_CALENDAR_ICAL_URL`を第一候補にします。Google
+Calendarの「非公開アドレス（iCal形式）」を設定すると、定期予定・タイムゾーン・
+終日予定をサーバーで展開します。未設定時だけサービスアカウント設定
+（`GOOGLE_CALENDAR_CLIENT_EMAIL`、`GOOGLE_CALENDAR_PRIVATE_KEY`、
+`GOOGLE_CALENDAR_ID`）へフォールバックします。旧
+`VITE_GOOGLE_CALENDAR_ICAL_URL`はURLがクライアントbundleへ漏れるため使用禁止です。
+
 ### 3. フロントエンド起動
 ```bash
 # プロジェクトルートに戻る
@@ -304,6 +311,12 @@ Phase 1はリサーチャーの調査結果に依存しないため、**並行�
 - **プラットフォーム**: Vercel
 - **自動デプロイ**: mainブランチへのpush時
 - **環境変数**: Vercel Dashboardで管理
+
+VercelのProject Settings → Environment Variablesで`GEMINI_API_KEY`と
+`GOOGLE_CALENDAR_ICAL_URL`を暗号化環境変数として設定し、Production / Previewの
+必要な環境だけへ適用してください。private iCal URLを`VITE_`接頭辞の変数、ログ、
+PR本文、スクリーンショットへ記載してはいけません。iCalを使わない環境では、代わりに
+上記3つのサービスアカウント変数を設定し、対象Calendarをread-only共有します。
 
 ### ローカル開発
 - フロントエンド: `http://localhost:8000/src/index.html`
