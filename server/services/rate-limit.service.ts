@@ -22,7 +22,9 @@ function evictWindows(now: number): void {
 export function normalizeClientIp(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const candidate = value.split(',')[0]?.trim();
-  return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(candidate) || /^[0-9a-f:]+$/i.test(candidate) ? candidate : null;
+  if (!candidate) return null;
+  const normalized = candidate.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '');
+  return isIP(normalized) ? normalized : null;
 }
 
 export function allowChatRequest(key: string, now = Date.now(), limit = 30, windowMs = 60_000): boolean {
@@ -35,3 +37,4 @@ export function allowChatRequest(key: string, now = Date.now(), limit = 30, wind
   entry.count += 1;
   return entry.count <= limit;
 }
+import { isIP } from 'node:net';
