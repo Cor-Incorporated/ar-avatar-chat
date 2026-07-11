@@ -212,7 +212,10 @@
 }
 
 .bottom-sheet-send:disabled,
-.bottom-sheet-input:disabled {
+.bottom-sheet-input[readonly],
+.bottom-sheet-attach:disabled,
+.bottom-sheet-camera:disabled,
+.chat-retry:disabled {
   cursor: wait;
   opacity: 0.65;
 }
@@ -257,6 +260,7 @@
 .attachment-error,
 .chat-status.is-error { color: #8c1d18; }
 .chat-retry { border-radius: 10px; padding: 8px 12px; font-weight: 700; }
+.chat-status.is-visible { margin-left: auto; }
 
 @media (orientation: landscape) and (max-height: 600px) {
   .messages-preview,

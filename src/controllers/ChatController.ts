@@ -55,6 +55,11 @@ export class ChatController {
 
       // アシスタントのメッセージを追加
       this.bottomSheet.addMessage('assistant', data.message);
+      if (data.action?.type === 'retry') {
+        this.bottomSheet.showError('カレンダー情報を取得できませんでした。', () => void this.sendMessage(payload));
+      } else {
+        this.bottomSheet.clearError();
+      }
 
       // 感情に応じたアニメーション再生
       if (data.emotion) this.avatarController?.playEmotion(data.emotion);
@@ -62,7 +67,7 @@ export class ChatController {
     } catch (error) {
       console.error('[Chat Controller] エラー:', error);
       this.bottomSheet.hideTyping();
-      this.bottomSheet.addMessage('assistant', 'すみません、エラーが発生しました。');
+      this.bottomSheet.showError('通信に失敗しました。接続を確認して再試行してください。', () => void this.sendMessage(payload));
 
       // エラー時はsad感情を表示
       this.avatarController?.playEmotion('sad');
@@ -74,5 +79,9 @@ export class ChatController {
    */
   public getBottomSheet(): BottomSheet {
     return this.bottomSheet;
+  }
+
+  public destroy(): void {
+    this.bottomSheet.destroy();
   }
 }
