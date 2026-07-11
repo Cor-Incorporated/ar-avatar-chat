@@ -47,6 +47,7 @@ export function extractPublicDescription(description?: string | null): string | 
 }
 
 export function sanitizePublicEvent(event: calendar_v3.Schema$Event, prefix: string): PublicCalendarEvent | null {
+  if (event.status?.toLowerCase() === 'cancelled') return null;
   const summary = event.summary || '';
   if (!summary.startsWith(prefix)) return null;
   const title = summary.slice(prefix.length).trim();
