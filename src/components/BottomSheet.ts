@@ -18,6 +18,7 @@ const MAX_STORED_MESSAGES = 50;
 export class BottomSheet {
   private container: HTMLElement | null = null;
   private messagesContainer: HTMLElement | null = null;
+  private chatControls: HTMLElement | null = null;
   private inputContainer: HTMLElement | null = null;
   private attachmentPreview: HTMLElement | null = null;
   private statusElement: HTMLElement | null = null;
@@ -84,6 +85,7 @@ export class BottomSheet {
     document.body.insertAdjacentHTML('beforeend', html);
     this.container = document.getElementById('bottom-sheet');
     this.messagesContainer = document.getElementById('messages-preview');
+    this.chatControls = this.container?.querySelector('.chat-controls') as HTMLElement | null;
     this.attachmentPreview = document.getElementById('attachment-preview');
     this.statusElement = document.getElementById('chat-status');
     this.inputContainer = document.getElementById('input-container');
@@ -143,9 +145,9 @@ export class BottomSheet {
     const offset = Math.max(0, Math.round(layoutHeight - viewportBottom));
     this.container.style.setProperty('--viewport-bottom-offset', `${offset}px`);
 
-    if (this.inputContainer) {
-      const height = Math.ceil(this.inputContainer.getBoundingClientRect().height);
-      this.container.style.setProperty('--chat-input-height', `${height}px`);
+    if (this.chatControls) {
+      const height = Math.ceil(this.chatControls.getBoundingClientRect().height);
+      this.container.style.setProperty('--chat-controls-height', `${height}px`);
     }
   };
 
@@ -265,12 +267,14 @@ export class BottomSheet {
       () => this.clearAttachment(),
       { signal: this.listenerController.signal },
     );
+    this.syncViewportMetrics();
   }
 
   private showAttachmentError(message: string): void {
     if (!this.attachmentPreview) return;
     this.attachmentPreview.innerHTML = `<div class="attachment-error">${this.escapeHtml(message)}</div>`;
     this.attachmentPreview.classList.add('is-visible');
+    this.syncViewportMetrics();
     if (this.attachmentErrorTimer !== null) window.clearTimeout(this.attachmentErrorTimer);
     this.attachmentErrorTimer = window.setTimeout(() => {
       this.attachmentErrorTimer = null;
@@ -434,6 +438,7 @@ export class BottomSheet {
     this.retryCallback = retry ?? null;
     if (this.retryButton) this.retryButton.hidden = !retry;
     this.statusElement?.classList.add('is-visible', 'is-error');
+    this.syncViewportMetrics();
   }
 
   public clearError(): void {
@@ -442,6 +447,7 @@ export class BottomSheet {
     this.retryCallback = null;
     if (this.retryButton) this.retryButton.hidden = true;
     this.statusElement?.classList.remove('is-visible', 'is-error');
+    this.syncViewportMetrics();
   }
 
   public setSendCallback(callback: (payload: MessageSendPayload) => void): void {
@@ -463,6 +469,7 @@ export class BottomSheet {
     this.container?.remove();
     this.container = null;
     this.messagesContainer = null;
+    this.chatControls = null;
     this.inputContainer = null;
     this.attachmentPreview = null;
     this.statusElement = null;
