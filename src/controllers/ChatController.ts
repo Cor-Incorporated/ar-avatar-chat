@@ -8,12 +8,18 @@ import type { ChatAPIResponse, MessageSendPayload } from '../types/chat.types.js
 export class ChatController {
   private bottomSheet: BottomSheet;
   private apiEndpoint: string;
+  private destroyed = false;
 
   constructor(apiEndpoint: string = 'http://localhost:3000/api/chat') {
     this.apiEndpoint = apiEndpoint;
     this.bottomSheet = new BottomSheet();
     this.bottomSheet.setSendCallback(this.sendMessage.bind(this));
+    window.addEventListener('pagehide', this.handlePageHide);
   }
+
+  private handlePageHide = (): void => {
+    this.destroy();
+  };
 
   /**
    * メッセージを送信してAPIから応答を取得
@@ -77,6 +83,9 @@ export class ChatController {
   }
 
   public destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    window.removeEventListener('pagehide', this.handlePageHide);
     this.bottomSheet.destroy();
   }
 }
