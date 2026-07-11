@@ -360,7 +360,10 @@ export class BottomSheet {
     if (wasCollapsed) this.state = 'peek';
     this.updateStateClass();
     if (!wasCollapsed && this.messagesContainer) {
-      this.messagesContainer.insertAdjacentHTML('beforeend', this.createMessageBubble(this.messages.at(-1)!));
+      this.messagesContainer.insertAdjacentHTML(
+        'beforeend',
+        this.createMessageBubble(this.messages[this.messages.length - 1]),
+      );
       const count = this.state === 'expanded' ? 10 : 2;
       while (this.messagesContainer.children.length > count) this.messagesContainer.firstElementChild?.remove();
       this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;

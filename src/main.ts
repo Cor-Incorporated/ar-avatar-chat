@@ -8,7 +8,7 @@ if (!canvas || !status || !info) throw new Error('Required AR shell elements wer
 
 const apiUrl = window.location.hostname === 'localhost' ? 'http://localhost:3000/api/chat' : '/api/chat';
 const runtime = new ARRuntime(canvas);
-new ChatController(apiUrl, runtime.avatar);
+const chatController = new ChatController(apiUrl, runtime.avatar);
 runtime.addEventListener('markerfound', () => {
   status.textContent = '✅ マーカー検出！';
   info.classList.add('hidden');
@@ -32,4 +32,7 @@ runtime.start().catch((error: unknown) => {
     : '❌ ARの初期化に失敗しました';
 });
 
-window.addEventListener('pagehide', () => runtime.dispose(), { once: true });
+window.addEventListener('pagehide', () => {
+  chatController.destroy();
+  runtime.dispose();
+}, { once: true });
