@@ -4,7 +4,9 @@ export interface KnowledgeSource {
   id: string;
   title: string;
   repositoryPath: string;
-  verifiedAt: string;
+  sourceUpdatedAt: string;
+  reviewedAt: string;
+  lineHint: string;
 }
 
 export interface KnowledgeEntry {
@@ -16,7 +18,7 @@ export interface KnowledgeEntry {
   keywords: readonly string[];
   sourceIds: readonly string[];
   visibility: 'public';
-  verifiedAt: string;
+  reviewedAt: string;
 }
 
 export interface KnowledgeSearchResult {

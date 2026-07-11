@@ -20,11 +20,12 @@ function scoreEntry(query: string, entry: KnowledgeEntry): KnowledgeSearchResult
     else continue;
     matchedTerms.push(candidate);
   }
-  return score > 0 ? { entry, score, matchedTerms } : null;
+  return score >= 4 ? { entry, score, matchedTerms } : null;
 }
 
 export function searchPublicKnowledge(query: string, limit = 5): KnowledgeSearchResult[] {
   if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new RangeError('Knowledge search limit must be between 1 and 20');
+  if (normalizeKnowledgeText(query).length < 3) return [];
   return PUBLIC_KNOWLEDGE
     .map((entry) => scoreEntry(query, entry))
     .filter((result): result is KnowledgeSearchResult => result !== null)
