@@ -160,9 +160,11 @@ export async function handleFunctionCalling(
     });
     calendarResult = execution.toolResults[0]?.output as CalendarResult | undefined;
     if (!calendarResult) calendarResult = await calendarProvider.query(query);
-    const safePrompt = unknownCompanyInMixed
-      ? splitIntentClauses(userPrompt).filter((clause) => classifyIntentRoute(clause).signals.includes('calendar')).join('、')
-      : userPrompt;
+    const safePrompt = splitIntentClauses(userPrompt).filter((clause) => {
+      const clauseSignals = classifyIntentRoute(clause).signals;
+      if (clauseSignals.includes('calendar') || clauseSignals.includes('temporal')) return true;
+      return knowledgeResults.length > 0 && clauseSignals.includes('company');
+    }).join('、') || userPrompt;
     const safeKnowledgeText = unknownCompanyInMixed
       ? '会社情報は登録済み公開知識で確認できないため推測せず、その旨を明示してください。'
       : knowledgeText;

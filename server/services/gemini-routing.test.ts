@@ -141,6 +141,14 @@ describe('Gemini route orchestration', () => {
     expect(finalCall.system).toContain('登録済み公開知識で確認できない');
   });
 
+  it('drops an unrelated reservation clause from the Calendar model prompt', async () => {
+    searchKnowledge.mockReturnValueOnce([]);
+    await handleFunctionCalling('key', 'デモを予約したい、あと来週の公開予定を教えて', [], [], provider, context, { generate, searchKnowledge });
+    const finalCall = calls[calls.length - 1];
+    expect(finalCall.messages[finalCall.messages.length - 1].content).toBe('来週の公開予定を教えて');
+    expect(JSON.stringify(finalCall)).not.toContain('デモを予約したい');
+  });
+
   it('answers unknown company plus current time without a model or Calendar', async () => {
     searchKnowledge.mockReturnValueOnce([]);
     const result = await handleFunctionCalling('key', '御社の未公開売上を教えて、あと今何時？', [], [], provider, context, { generate, searchKnowledge });
