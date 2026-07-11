@@ -8,6 +8,7 @@
     "dev": "tsc --watch",
     "type-check": "tsc --noEmit",
     "start": "node dist/index.js",
+    "probe:calendar": "npm run build && node scripts/calendar-live-probe.mjs",
     "test": "vitest run --root ."
   },
   "keywords": [],
