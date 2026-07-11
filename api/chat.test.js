@@ -13,7 +13,7 @@ function responseHarness() {
 
 function dependencies(overrides = {}) {
   return {
-    handleFunctionCalling: vi.fn().mockResolvedValue({ text: '通常応答', emotion: 'neutral' }),
+    handleFunctionCalling: vi.fn().mockResolvedValue({ text: '通常応答', emotion: 'neutral', route: 'ordinary', model: 'gemini-3.1-flash-lite' }),
     allowChatRequest: vi.fn().mockReturnValue(true),
     normalizeClientIp: vi.fn((value) => typeof value === 'string' ? value.split(',')[0] : null),
     getGeminiModel: vi.fn((env) => {
@@ -47,6 +47,7 @@ describe('/api/chat boundary harness', () => {
     expect(services.handleFunctionCalling).toHaveBeenCalledWith('test-key', 'こんにちは', [], [], undefined, requestContext);
     expect(res.body.timestamp).toEqual(requestContext.now);
     expect(JSON.stringify(logger.info.mock.calls)).not.toContain('こんにちは');
+    expect(logger.info.mock.calls[0][1]).toMatchObject({ route: 'ordinary', model: 'gemini-3.1-flash-lite', commitSha: 'abcdef1234567' });
   });
 
   it.each([
