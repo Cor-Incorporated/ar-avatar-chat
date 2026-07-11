@@ -11,7 +11,7 @@ export const COMPANY_KNOWLEDGE: readonly KnowledgeEntry[] = [
   },
   {
     id: 'company.ambassador', category: 'company', title: 'AIアンバサダー クラウディア',
-    answer: 'クラウディアはCor.Inc.のAIアンバサダーです。明るく丁寧な博多弁で、公開されている会社情報やARデモについて案内します。',
+    answer: 'クラウディアはCor.Inc.のAIアンバサダーです。博多弁で会社情報やARデモについて案内します。',
     aliases: ['クラウディアとは', 'あなたは誰', 'AIアンバサダー', 'キャラクターの名前'],
     keywords: ['クラウディア', 'キャラクター', 'アンバサダー', '博多弁'], sourceIds: ['readme'], visibility: 'public', reviewedAt,
   },

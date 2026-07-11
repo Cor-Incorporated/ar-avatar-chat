@@ -17,9 +17,9 @@ export const SERVICE_KNOWLEDGE: readonly KnowledgeEntry[] = [
   },
   {
     id: 'service.chat', category: 'service', title: 'AIチャット',
-    answer: 'テキストと画像を使ってAIアンバサダーと会話できます。回答は公開情報を基準とし、確認できない事実は推測しません。',
+    answer: 'テキストと画像を使ってAIアンバサダーと会話できます。構造化知識から回答する場合は、確認できる公開情報だけを使用します。',
     aliases: ['チャット機能', 'AIと話せる', '画像を質問', '会話機能'],
-    keywords: ['AI', 'チャット', '会話', '画像', '質問'], sourceIds: ['readme'], visibility: 'public', reviewedAt,
+    keywords: ['AI', 'チャット', '会話', '画像', '質問'], sourceIds: ['readme', 'knowledge-policy'], visibility: 'public', reviewedAt,
   },
   {
     id: 'service.calendar', category: 'service', title: '公開Calendar案内',
