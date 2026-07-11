@@ -75,6 +75,20 @@ describe('Gemini route orchestration', () => {
     expect(JSON.stringify(calls)).not.toContain('資本金');
     expect(result.text).toContain('機密データを安全に扱うAI基盤');
     expect(result.text).toContain('公開知識に未登録');
+    expect(result.text).toContain('公開デモ（7月12日 10:00〜7月12日 11:00）');
+  });
+
+  it('preserves JST availability in a deterministic unknown-company response', async () => {
+    query.mockResolvedValueOnce({
+      events: [],
+      availability: { free: [{ start: '2026-07-12T01:00:00.000Z', end: '2026-07-12T02:30:00.000Z' }] },
+      queriedRange: calendarResult.queriedRange,
+    });
+    searchKnowledge.mockReturnValueOnce([]);
+    const result = await handleFunctionCalling('key', '御社の資本金と今週の空き時間を教えて', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.text).toContain('空き時間は7月12日 10:00〜7月12日 11:30');
+    expect(result.calendar?.availabilityProvided).toBe(true);
+    expect(JSON.stringify(calls)).not.toContain('資本金');
   });
 
   it('combines a known overview with a deterministic refusal without Calendar', async () => {

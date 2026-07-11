@@ -76,8 +76,14 @@ function buildSystem(context: RequestContext, knowledgeText?: string, calendar?:
 }
 
 function deterministicCalendarSummary(calendar: CalendarResult, timezone: string): string {
+  const format = (value: string) => new Intl.DateTimeFormat('ja-JP', {
+    timeZone: timezone, month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(new Date(value));
+  if (calendar.availability?.free.length) {
+    return `空き時間は${calendar.availability.free.map((slot) => `${format(slot.start)}〜${format(slot.end)}`).join('、')}です。`;
+  }
   if (calendar.events.length) {
-    return `公開予定は${calendar.events.map((event) => `${event.title}（${event.start}〜${event.end}）`).join('、')}です。`;
+    return `公開予定は${calendar.events.map((event) => `${event.title}（${format(event.start)}〜${format(event.end)}）`).join('、')}です。`;
   }
   const date = new Intl.DateTimeFormat('ja-JP', { timeZone: timezone, year: 'numeric', month: 'long', day: 'numeric' })
     .format(new Date(calendar.queriedRange.start));
