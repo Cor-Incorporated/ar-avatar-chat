@@ -26,7 +26,10 @@
          own a higher stacking context or its child canvas stays behind video. */
       #ar-stage { z-index: 1; overflow: hidden; pointer-events: none; }
       #arjs-video { z-index: 0 !important; object-fit: cover !important; }
-      #ar-canvas { z-index: 0; background: transparent; }
+      #ar-canvas { z-index: 1; background: transparent; }
+      #ar-stage {
+        transform: translate3d(var(--ar-vv-offset-x, 0px), var(--ar-vv-offset-y, 0px), 0);
+      }
       #info {
         position: fixed;
         top: max(10px, env(safe-area-inset-top));

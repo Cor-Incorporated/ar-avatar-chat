@@ -17,7 +17,7 @@ import {
   ArToolkitSource,
 } from '@ar-js-org/ar.js/three.js/build/ar-threex.mjs';
 import { AvatarController } from './AvatarController.js';
-import { clampFrameDelta, coverProjectionScale, detectARSourceOrientation, shouldDeferViewportResize } from './runtimeMath.js';
+import { clampFrameDelta, coverProjectionScale, detectARSourceOrientation, isObjectSafelyInCameraView, normalizeViewportOffset, shouldDeferViewportResize } from './runtimeMath.js';
 
 export class ARRuntime extends EventTarget {
   readonly avatar = new AvatarController();
@@ -47,6 +47,8 @@ export class ARRuntime extends EventTarget {
     key.position.set(1, 2, 1);
     this.scene.add(key);
     window.addEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
+    window.visualViewport?.addEventListener('resize', this.syncVisualViewportOffset);
+    window.visualViewport?.addEventListener('scroll', this.syncVisualViewportOffset);
   }
 
   async start(): Promise<void> {
@@ -88,6 +90,7 @@ export class ARRuntime extends EventTarget {
       throw new Error('AR.js camera source was disposed before becoming ready');
     }
     await this.waitForCameraFrame(source.domElement);
+    document.querySelector('#ar-stage')?.prepend(source.domElement);
     await this.initializeContext(context);
     if (this.disposed || this.context !== context || this.source !== source) {
       throw new Error('AR.js initialization was interrupted');
@@ -224,12 +227,21 @@ export class ARRuntime extends EventTarget {
     const active = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
     const wasActive = this.keyboardOverlayActive;
     this.keyboardOverlayActive = active;
+    this.syncVisualViewportOffset();
     if (wasActive && !active) {
       // Reconcile once after Safari has restored its layout viewport.
       requestAnimationFrame(() => {
         if (!this.disposed) this.resize();
       });
     }
+  };
+
+  private syncVisualViewportOffset = (): void => {
+    const viewport = window.visualViewport;
+    const x = this.keyboardOverlayActive ? normalizeViewportOffset(viewport?.offsetLeft ?? 0) : 0;
+    const y = this.keyboardOverlayActive ? normalizeViewportOffset(viewport?.offsetTop ?? 0) : 0;
+    document.documentElement.style.setProperty('--ar-vv-offset-x', `${x}px`);
+    document.documentElement.style.setProperty('--ar-vv-offset-y', `${y}px`);
   };
 
   private renderFrame = (): void => {
@@ -245,6 +257,9 @@ export class ARRuntime extends EventTarget {
       // avatar directly below this anchor avoids copying stale/decomposed
       // transforms and gives tracking a single source of truth.
       this.markerRoot.updateMatrixWorld(true);
+      this.avatar.root.visible = isObjectSafelyInCameraView(this.avatar.root, this.camera);
+    } else {
+      this.avatar.root.visible = false;
     }
     if (markerVisible && !this.lastMarkerVisible) {
       this.avatar.ensureIdle();
@@ -287,6 +302,10 @@ export class ARRuntime extends EventTarget {
     window.removeEventListener('resize', this.handleViewportResize);
     window.removeEventListener('orientationchange', this.handleViewportResize);
     window.removeEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
+    window.visualViewport?.removeEventListener('resize', this.syncVisualViewportOffset);
+    window.visualViewport?.removeEventListener('scroll', this.syncVisualViewportOffset);
+    document.documentElement.style.setProperty('--ar-vv-offset-x', '0px');
+    document.documentElement.style.setProperty('--ar-vv-offset-y', '0px');
     this.markerControls?.dispose?.();
     this.source?.dispose();
     if (this.cameraParametersUrl) URL.revokeObjectURL(this.cameraParametersUrl);

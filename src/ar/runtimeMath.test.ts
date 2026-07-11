@@ -1,6 +1,6 @@
-import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D } from 'three';
+import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, detectARSourceOrientation, isCameraPermissionError, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize } from './runtimeMath.js';
+import { anchorAvatarToFeet, anchorObjectToWorldPoints, clampFrameDelta, coverProjectionScale, detectARSourceOrientation, isCameraPermissionError, isObjectSafelyInCameraView, MAX_FRAME_DELTA_SECONDS, normalizeViewportOffset, setUniformScale, shouldDeferViewportResize } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -26,6 +26,12 @@ describe('AR runtime math', () => {
     expect(shouldDeferViewportResize(false)).toBe(false);
   });
 
+  it('sanitizes visual viewport pan offsets', () => {
+    expect(normalizeViewportOffset(24.5)).toBe(24.5);
+    expect(normalizeViewportOffset(-2)).toBe(0);
+    expect(normalizeViewportOffset(Number.NaN)).toBe(0);
+  });
+
   it('reports the rendered camera orientation used by ARToolkit', () => {
     expect(detectARSourceOrientation(390, 844)).toBe('portrait');
     expect(detectARSourceOrientation(844, 390)).toBe('landscape');
@@ -46,5 +52,26 @@ describe('AR runtime math', () => {
     anchorAvatarToFeet(object);
     object.updateWorldMatrix(true, true);
     expect(object.position.toArray()).toEqual([-3, -2, 2]);
+  });
+
+  it('anchors scaled humanoid feet using parent-space world positions', () => {
+    const avatar = new Object3D();
+    avatar.scale.setScalar(0.5);
+    anchorObjectToWorldPoints(avatar, [new Vector3(-0.2, 0.1, 0.05), new Vector3(0.2, 0.1, 0.05)]);
+    expect(avatar.position.toArray()).toEqual([0, -0.1, -0.05]);
+  });
+
+  it('rejects an avatar that is behind, too close to, or outside the camera', () => {
+    const camera = new PerspectiveCamera(60, 1, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const avatar = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+    avatar.position.z = -3;
+    expect(isObjectSafelyInCameraView(avatar, camera)).toBe(true);
+    avatar.position.z = -0.1;
+    expect(isObjectSafelyInCameraView(avatar, camera)).toBe(false);
+    avatar.position.z = 2;
+    expect(isObjectSafelyInCameraView(avatar, camera)).toBe(false);
+    avatar.position.set(100, 0, -3);
+    expect(isObjectSafelyInCameraView(avatar, camera)).toBe(false);
   });
 });

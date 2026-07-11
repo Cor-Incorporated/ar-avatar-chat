@@ -12,7 +12,7 @@ import {
   VRMAnimationLoaderPlugin,
   createVRMAnimationClip,
 } from '@pixiv/three-vrm-animation';
-import { anchorAvatarToFeet, setUniformScale } from './runtimeMath.js';
+import { anchorAvatarToFeet, anchorObjectToWorldPoints, setUniformScale } from './runtimeMath.js';
 
 export type AvatarEmotion = 'neutral' | 'happy' | 'angry' | 'sad' | 'relaxed' | 'surprised' | 'thinking';
 
@@ -78,11 +78,8 @@ export class AvatarController extends EventTarget {
       return;
     }
     vrm.scene.updateWorldMatrix(true, true);
-    const positions = feet.map((foot) => vrm.scene.worldToLocal(foot.getWorldPosition(new Vector3())));
-    const centerX = positions.reduce((sum, foot) => sum + foot.x, 0) / positions.length;
-    const centerZ = positions.reduce((sum, foot) => sum + foot.z, 0) / positions.length;
-    const floorY = Math.min(...positions.map((foot) => foot.y));
-    vrm.scene.position.set(-centerX, -floorY, -centerZ);
+    const worldPositions = feet.map((foot) => foot.getWorldPosition(new Vector3()));
+    anchorObjectToWorldPoints(vrm.scene, worldPositions);
   }
 
   private async loadAnimation(emotion: AvatarEmotion, url: URL): Promise<void> {

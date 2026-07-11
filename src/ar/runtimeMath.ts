@@ -1,4 +1,4 @@
-import { Box3, Object3D, Vector3 } from 'three';
+import { Box3, Camera, Object3D, Vector3 } from 'three';
 
 export const MAX_FRAME_DELTA_SECONDS = 1 / 15;
 
@@ -9,6 +9,10 @@ export function clampFrameDelta(deltaSeconds: number): number {
 
 export function shouldDeferViewportResize(keyboardOverlayActive: boolean): boolean {
   return keyboardOverlayActive;
+}
+
+export function normalizeViewportOffset(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 export type ARSourceOrientation = 'portrait' | 'landscape';
@@ -57,4 +61,37 @@ export function anchorAvatarToFeet(object: Object3D): void {
   object.position.x -= center.x;
   object.position.y -= bounds.min.y;
   object.position.z -= center.z;
+}
+
+export function anchorObjectToWorldPoints(object: Object3D, worldPoints: readonly Vector3[]): void {
+  if (worldPoints.length === 0) throw new Error('At least one anchor point is required');
+  const points = worldPoints.map((point) => object.parent?.worldToLocal(point.clone()) ?? point.clone());
+  const centerX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const centerZ = points.reduce((sum, point) => sum + point.z, 0) / points.length;
+  const floorY = Math.min(...points.map((point) => point.y));
+  object.position.x -= centerX;
+  object.position.y -= floorY;
+  object.position.z -= centerZ;
+}
+
+export function isObjectSafelyInCameraView(
+  object: Object3D,
+  camera: Camera,
+  minimumDepth = 0.35,
+  ndcMargin = 1.25,
+): boolean {
+  object.updateWorldMatrix(true, true);
+  camera.updateWorldMatrix(true, false);
+  const bounds = new Box3().setFromObject(object);
+  if (bounds.isEmpty()) return false;
+  const center = bounds.getCenter(new Vector3());
+  const cameraSpace = center.clone().applyMatrix4(camera.matrixWorldInverse);
+  const ndc = center.clone().project(camera);
+  return Number.isFinite(cameraSpace.z)
+    && -cameraSpace.z >= minimumDepth
+    && [ndc.x, ndc.y, ndc.z].every(Number.isFinite)
+    && Math.abs(ndc.x) <= ndcMargin
+    && Math.abs(ndc.y) <= ndcMargin
+    && ndc.z >= -1
+    && ndc.z <= 1;
 }
