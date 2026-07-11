@@ -10,7 +10,12 @@ declare module '@ar-js-org/ar.js/three.js/build/ar-threex.mjs' {
     dispose(): void;
   }
   export class ArToolkitContext {
-    arController: { canvas: HTMLCanvasElement } | null;
+    arController: {
+      canvas: HTMLCanvasElement;
+      orientation?: 'portrait' | 'landscape';
+      options?: { orientation?: 'portrait' | 'landscape' };
+      getCameraMatrix(): ArrayLike<number>;
+    } | null;
     constructor(parameters: Record<string, unknown>);
     init(onReady: () => void): void;
     update(element: HTMLVideoElement): void;
