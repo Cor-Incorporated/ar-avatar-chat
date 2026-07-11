@@ -106,6 +106,26 @@ describe('Gemini route orchestration', () => {
     expect(query).toHaveBeenCalledOnce();
     expect(searchKnowledge).toHaveBeenCalledOnce();
     expect(result.calendar?.publicEventCount).toBe(1);
+    expect(result.text).toContain('公開デモ（7月12日 10:00〜7月12日 11:00）');
+  });
+
+  it('returns deterministic empty Calendar facts', async () => {
+    query.mockResolvedValueOnce({ events: [], queriedRange: calendarResult.queriedRange });
+    const result = await handleFunctionCalling('key', '明日の公開予定を教えて', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.text).toContain('公開予定はありません');
+    expect(query).toHaveBeenCalledOnce();
+    expect(calls).toHaveLength(1);
+  });
+
+  it('returns deterministic availability for a pure Calendar question', async () => {
+    query.mockResolvedValueOnce({
+      events: [], availability: { free: [{ start: '2026-07-12T01:00:00.000Z', end: '2026-07-12T02:30:00.000Z' }] },
+      queriedRange: calendarResult.queriedRange,
+    });
+    const result = await handleFunctionCalling('key', '今週の空き時間を教えて', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.text).toContain('空き時間は7月12日 10:00〜7月12日 11:30');
+    expect(result.calendar?.availabilityProvided).toBe(true);
+    expect(query).toHaveBeenCalledOnce();
   });
 
   it('combines knowledge and Calendar facts for mixed intent', async () => {
@@ -113,20 +133,19 @@ describe('Gemini route orchestration', () => {
     expect(result.route).toBe('mixed');
     expect(searchKnowledge).toHaveBeenCalledOnce();
     expect(query).toHaveBeenCalledOnce();
-    const finalCall = calls[calls.length - 1];
-    expect(finalCall.system.indexOf('[character]')).toBeLessThan(finalCall.system.indexOf('[disclosure]'));
-    expect(finalCall.system.indexOf('[disclosure]')).toBeLessThan(finalCall.system.indexOf('[knowledge]'));
-    expect(finalCall.system.indexOf('[knowledge]')).toBeLessThan(finalCall.system.indexOf('[calendar]'));
-    expect(finalCall.system).toContain('登録済み公開情報');
-    expect(finalCall.system).toContain('公開デモ');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].prompt).toContain('正規化済み');
+    expect(result.text).toContain('登録済み公開情報');
+    expect(result.text).toContain('公開デモ');
   });
 
   it('keeps temporal context while querying Calendar for a mixed temporal request', async () => {
     const result = await handleFunctionCalling('key', '今何時？ あと明日の公開予定も教えて', [], [], provider, context, { generate, searchKnowledge });
     expect(result.route).toBe('mixed');
     expect(query).toHaveBeenCalledOnce();
-    expect(calls[calls.length - 1].system).toContain('[temporal]');
-    expect(calls[calls.length - 1].system).toContain('2026年7月11日、土曜日、15:49');
+    expect(calls).toHaveLength(1);
+    expect(result.text).toContain('2026年7月11日 15:49（日本時間）');
+    expect(result.text).toContain('公開デモ');
   });
 
   it('keeps company plus temporal intent off Calendar', async () => {
@@ -200,9 +219,9 @@ describe('Gemini route orchestration', () => {
   it('drops an unrelated reservation clause from the Calendar model prompt', async () => {
     searchKnowledge.mockReturnValueOnce([]);
     await handleFunctionCalling('key', 'デモを予約したい、あと来週の公開予定を教えて', [], [], provider, context, { generate, searchKnowledge });
-    const finalCall = calls[calls.length - 1];
-    expect(finalCall.messages[finalCall.messages.length - 1].content).toBe('来週の公開予定を教えて');
-    expect(JSON.stringify(finalCall)).not.toContain('デモを予約したい');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].prompt).toContain('正規化済み');
+    expect(JSON.stringify(calls)).not.toContain('デモを予約したい');
   });
 
   it('answers unknown company plus current time without a model or Calendar', async () => {

@@ -193,31 +193,18 @@ export async function handleFunctionCalling(
     calendarResult = execution.toolResults[0]?.output as CalendarResult | undefined;
     if (!calendarResult) calendarResult = await calendarProvider.query(query);
     const calendarMetadata = { queriedRange: calendarResult.queriedRange, publicEventCount: calendarResult.events.length, availabilityProvided: Boolean(calendarResult.availability) };
-    if (unknownCompanyInMixed) {
-      const knownFacts = knowledgeResults.map(({ entry }) => entry.answer).join(' ');
-      return {
-        text: `${knownFacts ? `${knownFacts} ` : ''}そのほかの会社情報は公開知識に未登録のため案内できません。${deterministicCalendarSummary(calendarResult, context.timezone)}`,
-        emotion: 'neutral', route, model: 'deterministic', knowledge, calendar: calendarMetadata,
-      };
-    }
-    const safePrompt = unknownCompanyInMixed
-      ? '取得済みの公開Calendar事実だけを案内し、会社情報は公開知識に未登録と明示してください。'
-      : splitIntentClauses(userPrompt).filter((clause) => {
-        const clauseSignals = classifyIntentRoute(clause).signals;
-        if (clauseSignals.includes('calendar') || clauseSignals.includes('temporal')) return true;
-        return knownCompanyClauses.has(clause) && clauseSignals.includes('company');
-      }).join('、');
-    const safeKnowledgeText = unknownCompanyInMixed
-      ? `${knowledgeText}\n未登録の会社情報は推測せず、公開知識に未登録と明示してください。`
-      : knowledgeText;
-    const response = await renderResponse(
-      apiKey,
-      safePrompt,
-      unknownCompanyInMixed ? [] : attachments,
-      unknownCompanyInMixed ? [] : conversationHistory,
-      context, calendarResult, safeKnowledgeText, deps,
-    );
-    return { ...response, route, knowledge, calendar: calendarMetadata };
+    const temporalResponse = clauses.map((clause) => resolveTemporalFact(clause, context)).find(Boolean);
+    const knownFacts = knowledgeResults.map(({ entry }) => entry.answer).join(' ');
+    const parts = [
+      knownFacts,
+      unknownCompanyInMixed ? 'そのほかの会社情報は公開知識に未登録のため案内できんとよ。' : '',
+      temporalResponse ? temporalFactResponse(temporalResponse).text : '',
+      deterministicCalendarSummary(calendarResult, context.timezone),
+    ].filter(Boolean);
+    return {
+      text: `${parts.join(' ')}ばい！`,
+      emotion: 'neutral', route, model: 'deterministic', knowledge, calendar: calendarMetadata,
+    };
   } catch (error) {
     const code = error instanceof CalendarProviderError ? error.code : 'calendar_unavailable';
     console.warn('[Calendar] query failed', { code, retryable: error instanceof CalendarProviderError && error.retryable });
