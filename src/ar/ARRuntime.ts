@@ -61,7 +61,7 @@ export class ARRuntime extends EventTarget {
     this.frame = requestAnimationFrame(this.renderFrame);
   }
 
-  private initializeTracking(): Promise<void> {
+  private async initializeTracking(): Promise<void> {
     // AR.js' npm package omits this calibration file. Bundle the official 3.4.8
     // payload so production startup does not depend on a third-party CDN.
     const calibration = Uint8Array.from(
@@ -86,31 +86,54 @@ export class ARRuntime extends EventTarget {
       canvasHeight: 960,
     });
 
+    const source = this.source;
+    const context = this.context;
+    await this.initializeSource(source);
+    if (this.disposed || this.source !== source) {
+      throw new Error('AR.js camera source was disposed before becoming ready');
+    }
+    await this.waitForCameraFrame(source.domElement);
+    await this.initializeContext(context);
+    if (this.disposed || this.context !== context || this.source !== source) {
+      throw new Error('AR.js initialization was interrupted');
+    }
+
+    this.camera.projectionMatrix.copy(context.getProjectionMatrix());
+    this.markerControls = new ArMarkerControls(context, this.markerRoot, {
+      type: 'pattern',
+      patternUrl: new URL('../assets/markers/penguin-marker.patt', import.meta.url).href,
+      changeMatrixMode: 'modelViewMatrix',
+      size: 1,
+      minConfidence: 0.35,
+    });
+    this.smoothedControls = new ArSmoothedControls(this.smoothedRoot, {
+      lerpPosition: 0.45,
+      lerpQuaternion: 0.35,
+      lerpScale: 0.6,
+    });
+    this.resize();
+    window.addEventListener('resize', this.resize);
+    window.addEventListener('orientationchange', this.resize);
+    this.dispatchEvent(new Event('cameraready'));
+  }
+
+  private initializeSource(source: ArToolkitSource): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.source?.init(() => {
-        if (!this.source) return reject(new Error('AR.js camera source was disposed before becoming ready'));
-        this.waitForCameraFrame(this.source.domElement).then(() => this.context?.init(() => {
-          if (!this.context || !this.source) return reject(new Error('AR.js initialization was interrupted'));
-          this.camera.projectionMatrix.copy(this.context.getProjectionMatrix());
-          this.markerControls = new ArMarkerControls(this.context, this.markerRoot, {
-            type: 'pattern',
-            patternUrl: new URL('../assets/markers/penguin-marker.patt', import.meta.url).href,
-            changeMatrixMode: 'modelViewMatrix',
-            size: 1,
-            minConfidence: 0.35,
-          });
-          this.smoothedControls = new ArSmoothedControls(this.smoothedRoot, {
-            lerpPosition: 0.45,
-            lerpQuaternion: 0.35,
-            lerpScale: 0.6,
-          });
-          this.resize();
-          window.addEventListener('resize', this.resize);
-          window.addEventListener('orientationchange', this.resize);
-          this.dispatchEvent(new Event('cameraready'));
-          resolve();
-        }), reject);
-      }, reject);
+      try {
+        source.init(resolve, reject);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private initializeContext(context: ArToolkitContext): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        context.init(resolve);
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
