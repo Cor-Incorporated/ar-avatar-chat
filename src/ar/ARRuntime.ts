@@ -26,6 +26,7 @@ export class ARRuntime extends EventTarget {
   private readonly markerRoot = new Scene();
   private readonly renderer: WebGLRenderer;
   private readonly clock = new Clock(false);
+  private readonly debugEnabled = new URLSearchParams(location.search).get('debug') === 'true';
   private source: ArToolkitSource | null = null;
   private context: ArToolkitContext | null = null;
   private markerControls: ArMarkerControls | null = null;
@@ -106,7 +107,7 @@ export class ARRuntime extends EventTarget {
       size: 1,
       minConfidence: 0.35,
     });
-    if (new URLSearchParams(location.search).get('debug') === 'true') {
+    if (this.debugEnabled) {
       const markerProbe = new Mesh(
         new BoxGeometry(0.2, 0.2, 0.2),
         new MeshBasicMaterial({ color: 0xff00ff, wireframe: true }),
@@ -198,7 +199,7 @@ export class ARRuntime extends EventTarget {
     if (controller) {
       this.source.copyElementSizeTo(controller.canvas);
     }
-    if (new URLSearchParams(location.search).get('debug') === 'true') {
+    if (this.debugEnabled) {
       console.debug('[AR diagnostics]', {
         viewport: { width, height },
         video: {
@@ -274,7 +275,7 @@ export class ARRuntime extends EventTarget {
     }
     if (markerVisible && !this.lastMarkerVisible) {
       this.avatar.ensureIdle();
-      this.logMarkerDiagnostics();
+      if (this.debugEnabled) this.logMarkerDiagnostics();
       this.dispatchEvent(new Event('markerfound'));
     } else if (!markerVisible && this.lastMarkerVisible) {
       this.dispatchEvent(new Event('markerlost'));
