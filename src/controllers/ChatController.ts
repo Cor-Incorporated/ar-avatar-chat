@@ -5,12 +5,21 @@
 import { BottomSheet } from '../components/BottomSheet.js';
 import type { ChatAPIResponse, MessageSendPayload } from '../types/chat.types.js';
 
+interface AvatarEmotionController {
+  playEmotion(emotion: string): void;
+}
+
 export class ChatController {
   private bottomSheet: BottomSheet;
   private apiEndpoint: string;
+  private avatarController: AvatarEmotionController | null = null;
 
-  constructor(apiEndpoint: string = 'http://localhost:3000/api/chat') {
+  constructor(
+    apiEndpoint: string = 'http://localhost:3000/api/chat',
+    avatarController: AvatarEmotionController | null = null,
+  ) {
     this.apiEndpoint = apiEndpoint;
+    this.avatarController = avatarController;
     this.bottomSheet = new BottomSheet();
     this.bottomSheet.setSendCallback(this.sendMessage.bind(this));
   }
@@ -48,9 +57,7 @@ export class ChatController {
       this.bottomSheet.addMessage('assistant', data.message);
 
       // 感情に応じたアニメーション再生
-      if (data.emotion && (window as any).playEmotion) {
-        (window as any).playEmotion(data.emotion);
-      }
+      if (data.emotion) this.avatarController?.playEmotion(data.emotion);
 
     } catch (error) {
       console.error('[Chat Controller] エラー:', error);
@@ -58,9 +65,7 @@ export class ChatController {
       this.bottomSheet.addMessage('assistant', 'すみません、エラーが発生しました。');
 
       // エラー時はsad感情を表示
-      if ((window as any).playEmotion) {
-        (window as any).playEmotion('sad');
-      }
+      this.avatarController?.playEmotion('sad');
     }
   }
 
@@ -71,6 +76,3 @@ export class ChatController {
     return this.bottomSheet;
   }
 }
-
-// グローバルに公開（既存コードとの互換性のため）
-(window as any).ChatController = ChatController;

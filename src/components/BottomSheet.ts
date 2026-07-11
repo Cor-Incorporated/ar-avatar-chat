@@ -293,8 +293,8 @@ export class BottomSheet {
     const viewport = window.visualViewport;
     const offsetTop = viewport?.offsetTop ?? 0;
     const offsetLeft = viewport?.offsetLeft ?? 0;
-    const offsetX = -offsetLeft;
-    const offsetY = -offsetTop;
+    const offsetX = Math.max(0, Number.isFinite(offsetLeft) ? offsetLeft : 0);
+    const offsetY = Math.max(0, Number.isFinite(offsetTop) ? offsetTop : 0);
 
     if (this.lastAppliedOffsetX === offsetX && this.lastAppliedOffsetY === offsetY) {
       return;

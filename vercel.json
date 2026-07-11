@@ -1,14 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
-  "outputDirectory": ".",
+  "outputDirectory": "dist/client",
   "installCommand": "npm install && cd server && npm install",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Permissions-Policy", "value": "camera=(self)" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ],
   "rewrites": [
-    { "source": "/", "destination": "/src/index.html" },
-    { "source": "/components/:path*", "destination": "/src/components/:path*" },
-    { "source": "/assets/:path*", "destination": "/src/assets/:path*" },
-    { "source": "/styles/:path*", "destination": "/src/styles/:path*" },
-    { "source": "/dist/:path*", "destination": "/dist/:path*" }
+    { "source": "/", "destination": "/index.html" }
   ]
 }
-

@@ -4,13 +4,15 @@
   "description": "AR Avatar Chat Application with VRM and Gemini AI",
   "type": "module",
   "scripts": {
-    "build": "npm run build:server && npm run build:client",
+    "build": "npm run validate:vrma && npm run build:server && npm run build:client",
     "build:server": "cd server && npm run build",
-    "build:client": "tsc -p src/tsconfig.json",
+    "build:client": "tsc -p src/tsconfig.json --noEmit && vite build",
     "dev:server": "cd server && npm run dev",
     "type-check": "npm run type-check:server && npm run type-check:client",
     "type-check:server": "cd server && npm run type-check",
-    "type-check:client": "tsc -p src/tsconfig.json --noEmit"
+    "type-check:client": "tsc -p src/tsconfig.json --noEmit",
+    "test:ar": "vitest run src/ar",
+    "validate:vrma": "node scripts/validate-vrma.mjs"
   },
   "keywords": [
     "ar",
@@ -21,10 +23,19 @@
   ],
   "author": "",
   "license": "ISC",
+  "overrides": {
+    "axios": "1.18.1"
+  },
   "devDependencies": {
-    "@pixiv/three-vrm": "^3.4.2",
     "@types/three": "^0.180.0",
-    "@vercel/node": "^3.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "7.3.6",
+    "vitest": "3.2.7"
+  },
+  "dependencies": {
+    "@ar-js-org/ar.js": "3.4.8",
+    "@pixiv/three-vrm": "3.5.5",
+    "@pixiv/three-vrm-animation": "3.5.5",
+    "three": "0.180.0"
   }
 }
