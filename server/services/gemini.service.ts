@@ -4,7 +4,7 @@ import type { ChatAttachment, ConversationHistoryItem, GeminiResponse } from '..
 import type { CalendarProvider, CalendarResult } from '../types/calendar.types.js';
 import { CalendarProviderError } from '../types/calendar.types.js';
 import { isCalendarIntent, normalizeCalendarQuery } from './calendar-intent.service.js';
-import { GoogleServiceAccountCalendarProvider } from './google-calendar.service.js';
+import { createCalendarProvider } from './google-calendar.service.js';
 
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 type StructuredResponse = Pick<GeminiResponse, 'emotion'> & { message: string };
@@ -63,7 +63,7 @@ export async function handleFunctionCalling(
   if (!isCalendarIntent(userPrompt)) return renderResponse(apiKey, userPrompt, attachments, conversationHistory);
 
   try {
-    const calendarProvider = provider ?? new GoogleServiceAccountCalendarProvider();
+    const calendarProvider = provider ?? createCalendarProvider();
     const query = normalizeCalendarQuery(userPrompt, new Date(), timezone);
     let calendarResult: CalendarResult | undefined;
     // typed toolを会話実行境界として維持する。Calendar意図では最終応答生成と合わせて

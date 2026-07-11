@@ -22,6 +22,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "googleapis": "^161.0.0",
+    "node-ical": "^0.26.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
