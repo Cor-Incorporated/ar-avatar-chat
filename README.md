@@ -28,8 +28,10 @@ ar-avatar-chat/
 │   ├── 02_チェックリスト.md
 │   └── 03_技術調査結果.md (リサーチャー納品予定)
 ├── src/                # 開発チームの作業ディレクトリ
-│   ├── index.html      # メインHTML
-│   ├── components/     # A-Frameカスタムコンポーネント
+│   ├── index.html      # ViteエントリHTML
+│   ├── main.ts         # AR・チャットの起動とライフサイクル管理
+│   ├── ar/             # ARRuntime / AvatarController / AR専用テスト
+│   ├── components/     # チャットUI
 │   └── assets/         # 静的ファイル（VRM, マーカー等）
 └── assets/             # 外部アセット（VRMモデル、名刺画像等）
 ```
@@ -48,10 +50,8 @@ ar-avatar-chat/
 4. モーションアニメーション再生（VRMA形式 1.3MB）
 5. デバッグログ削除・コードリファクタリング完了
 
-**成果物**:
-- `src/index.html` - メインアプリケーション
-- `src/components/vrm-loader.js` - VRMローダーコンポーネント
-- `src/components/vrm-animation.js` - アニメーションコンポーネント
+**当時の成果物**: Phase 1のA-FrameコンポーネントはPhase 8で廃止され、
+現在は`src/ar/ARRuntime.ts`と`src/ar/AvatarController.ts`へ統合されています。
 - `src/assets/markers/penguin-marker.patt` - カスタムマーカー
 - 詳細: `docs/Phase1_動作確認レポート.md` 参照
 
@@ -149,6 +149,14 @@ ar-avatar-chat/
 
 **所要時間**: 2時間（予定2-4時間を短縮）
 
+### Phase 8: AR描画基盤の統合 ✅ **実装完了**（2026-07-11）
+
+- A-FrameとCDN import mapを廃止し、npm/Vite管理へ移行
+- AR.js Three.js版、Three.js、three-vrmを単一ランタイムへ統一
+- `AR tracking → AnimationMixer/VRM → render`の単一描画ループを実装
+- 足ボーン基準配置、等方スケール、cover投影補正を実装
+- VRMA資産検証とAR単体テストをビルドゲートへ追加
+
 3. GPU負荷低減（ライティング最適化）
 4. **UX改善**: 縦向きデフォルト + 柔軟な横向き提案
 5. 連続Lost検出による非侵襲的な警告ダイアログ
@@ -204,10 +212,11 @@ cd ..
 # フロントエンド依存関係インストール
 npm install
 
-# 開発サーバー起動
-npm run dev
-# または
-python3 -m http.server 8000
+# 本番相当のクライアントビルド
+npm run build:client
+
+# ローカルHTTPSまたはVercel Previewでカメラ動作を確認
+npx vite --host
 ```
 
 ### 4. アクセス
@@ -230,7 +239,7 @@ python3 -m http.server 8000
 2. **`docs/02_チェックリスト.md`** で進捗管理すること
 
 ### ⚠️ 重要な制約
-- **想像で実装しない**: 指示書に記載のコード例・CDNバージョンを厳守
+- **想像で実装しない**: `package.json`と現在の実装を正とし、変更理由をIssue/PRへ記録
 - **変更前に確認**: 指示書と異なる実装をする場合は、PdM（寺田）に事前報告
 - **各ステップで報告**: チェックリスト完了時にスクリーンショット + 動作確認結果を提出
 
@@ -274,11 +283,11 @@ Phase 1はリサーチャーの調査結果に依存しないため、**並行�
 ## 🎯 技術仕様
 
 ### フロントエンド
-- **A-Frame**: 1.7.0
-- **AR.js**: 3.4.7
-- **Three.js**: 0.177.0 (CDN) ← Phase 7でアップグレード
-- **@pixiv/three-vrm**: 3.4.2 (CDN) ← Phase 7で公式最新版に移行
-- **@pixiv/three-vrm-animation**: 3.4.2 (CDN) ← Phase 7で公式パッケージ追加
+- **AR.js**: 3.4.8（Three.js版）
+- **Three.js**: 0.180.0（npm、Viteで単一実体を検証）
+- **@pixiv/three-vrm**: 3.5.5
+- **@pixiv/three-vrm-animation**: 3.5.5
+- **Vite**: 7.3.6
 - **TypeScript**: 5.9.3
 - **モダンUI**: BottomSheet コンポーネント
 
