@@ -23,12 +23,14 @@
   ],
   "author": "",
   "license": "ISC",
+  "overrides": {
+    "axios": "1.18.1"
+  },
   "devDependencies": {
     "@types/three": "^0.180.0",
-    "@vercel/node": "^3.0.0",
     "typescript": "^5.9.3",
-    "vite": "7.1.12",
-    "vitest": "3.2.4"
+    "vite": "7.3.6",
+    "vitest": "3.2.7"
   },
   "dependencies": {
     "@ar-js-org/ar.js": "3.4.8",
