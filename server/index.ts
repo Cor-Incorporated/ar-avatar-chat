@@ -30,7 +30,6 @@ app.post('/api/chat', async (req: Request<{}, ChatResponse, ChatRequest>, res: R
     const result = await handleFunctionCalling(
       process.env.GEMINI_API_KEY!,
       normalizedMessage,
-      null,
       attachments || [],
       conversationHistory || [],
       undefined,

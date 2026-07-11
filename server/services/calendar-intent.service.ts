@@ -24,7 +24,9 @@ function jstDateParts(now: Date): [number, number, number] {
 }
 
 export function normalizeCalendarQuery(message: string, now = new Date(), timezone = 'Asia/Tokyo'): CalendarQuery {
-  if (timezone !== 'Asia/Tokyo') timezone = 'Asia/Tokyo';
+  if (timezone !== 'Asia/Tokyo') {
+    throw new CalendarProviderError('calendar_not_configured', 'Calendar timezone must be Asia/Tokyo');
+  }
   const [year, month, day] = jstDateParts(now);
   let start = jstMidnightUtc(year, month, day);
   let end = new Date(start.getTime() + 86_400_000);

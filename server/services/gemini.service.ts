@@ -48,7 +48,7 @@ async function renderResponse(apiKey: string, prompt: string, attachments: ChatA
 }
 
 export async function handleFunctionCalling(
-  apiKey: string, userPrompt: string, _legacyOauthToken: string | null,
+  apiKey: string, userPrompt: string,
   attachments: ChatAttachment[] = [], conversationHistory: ConversationHistoryItem[] = [],
   provider?: CalendarProvider, timezone = 'Asia/Tokyo'
 ): Promise<GeminiResponse> {
@@ -58,6 +58,8 @@ export async function handleFunctionCalling(
     const calendarProvider = provider ?? new GoogleServiceAccountCalendarProvider();
     const query = normalizeCalendarQuery(userPrompt, new Date(), timezone);
     let calendarResult: CalendarResult | undefined;
+    // typed toolを会話実行境界として維持する。Calendar意図では最終応答生成と合わせて
+    // Geminiを2回呼ぶため、匿名運用時のコスト・latencyはPRの残余リスクとして管理する。
     const calendarTool = tool({
       description: 'サーバーで設定されたカレンダーから公開予定と空き状況を取得する',
       inputSchema: emptyToolInput,

@@ -77,7 +77,6 @@ export default async function handler(req, res) {
     const result = await handleFunctionCalling(
       process.env.GEMINI_API_KEY,
       normalizedMessage,
-      null,
       attachments || [],
       conversationHistory || [],
       undefined,
