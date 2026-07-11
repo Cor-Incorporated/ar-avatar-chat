@@ -75,6 +75,15 @@ function buildSystem(context: RequestContext, knowledgeText?: string, calendar?:
   ].join('\n\n');
 }
 
+function deterministicCalendarSummary(calendar: CalendarResult, timezone: string): string {
+  if (calendar.events.length) {
+    return `公開予定は${calendar.events.map((event) => `${event.title}（${event.start}〜${event.end}）`).join('、')}です。`;
+  }
+  const date = new Intl.DateTimeFormat('ja-JP', { timeZone: timezone, year: 'numeric', month: 'long', day: 'numeric' })
+    .format(new Date(calendar.queriedRange.start));
+  return `${date}から始まる確認期間には公開予定はありません。`;
+}
+
 async function renderResponse(apiKey: string, prompt: string, attachments: ChatAttachment[], history: ConversationHistoryItem[], context: RequestContext, calendar?: CalendarResult, knowledgeText?: string, deps: GeminiDependencies = {}): Promise<GeminiResponse> {
   process.env.GOOGLE_GENERATIVE_AI_API_KEY = apiKey;
   const model = getGeminiModel();
@@ -177,6 +186,14 @@ export async function handleFunctionCalling(
     });
     calendarResult = execution.toolResults[0]?.output as CalendarResult | undefined;
     if (!calendarResult) calendarResult = await calendarProvider.query(query);
+    const calendarMetadata = { queriedRange: calendarResult.queriedRange, publicEventCount: calendarResult.events.length, availabilityProvided: Boolean(calendarResult.availability) };
+    if (unknownCompanyInMixed) {
+      const knownFacts = knowledgeResults.map(({ entry }) => entry.answer).join(' ');
+      return {
+        text: `${knownFacts ? `${knownFacts} ` : ''}そのほかの会社情報は公開知識に未登録のため案内できません。${deterministicCalendarSummary(calendarResult, context.timezone)}`,
+        emotion: 'neutral', route, model: 'deterministic', knowledge, calendar: calendarMetadata,
+      };
+    }
     const safePrompt = unknownCompanyInMixed
       ? '取得済みの公開Calendar事実だけを案内し、会社情報は公開知識に未登録と明示してください。'
       : splitIntentClauses(userPrompt).filter((clause) => {
@@ -194,7 +211,7 @@ export async function handleFunctionCalling(
       unknownCompanyInMixed ? [] : conversationHistory,
       context, calendarResult, safeKnowledgeText, deps,
     );
-    return { ...response, route, knowledge, calendar: { queriedRange: calendarResult.queriedRange, publicEventCount: calendarResult.events.length, availabilityProvided: Boolean(calendarResult.availability) } };
+    return { ...response, route, knowledge, calendar: calendarMetadata };
   } catch (error) {
     const code = error instanceof CalendarProviderError ? error.code : 'calendar_unavailable';
     console.warn('[Calendar] query failed', { code, retryable: error instanceof CalendarProviderError && error.retryable });
