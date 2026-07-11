@@ -75,15 +75,22 @@ function buildSystem(context: RequestContext, knowledgeText?: string, calendar?:
   ].join('\n\n');
 }
 
-function deterministicCalendarSummary(calendar: CalendarResult, timezone: string): string {
+function deterministicCalendarSummary(calendar: CalendarResult, timezone: string, now: Date): string {
   const format = (value: string) => new Intl.DateTimeFormat('ja-JP', {
     timeZone: timezone, month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).format(new Date(value));
   if (calendar.availability) {
-    if (calendar.availability.free.length) {
-      return `空き時間は${calendar.availability.free.map((slot) => `${format(slot.start)}〜${format(slot.end)}`).join('、')}ばい！`;
+    const nowMs = now.getTime();
+    const futureFree = calendar.availability.free
+      .filter((slot) => new Date(slot.end).getTime() > nowMs)
+      .map((slot) => ({
+        start: new Date(Math.max(new Date(slot.start).getTime(), nowMs)).toISOString(),
+        end: slot.end,
+      }));
+    if (futureFree.length) {
+      return `これからの空き時間は${futureFree.map((slot) => `${format(slot.start)}〜${format(slot.end)}`).join('、')}ばい！`;
     }
-    return '確認期間に空き時間はなかとよ。';
+    return '確認期間にこれからの空き時間はなかとよ。';
   }
   if (calendar.events.length) {
     return `公開予定は${calendar.events.map((event) => `${event.title}（${format(event.start)}〜${format(event.end)}）`).join('、')}ばい！`;
@@ -205,7 +212,7 @@ export async function handleFunctionCalling(
       knownFacts,
       unknownCompanyInMixed ? 'そのほかの会社情報は公開知識に未登録のため案内できんとよ。' : '',
       temporalResponse ? temporalFactResponse(temporalResponse).text : '',
-      deterministicCalendarSummary(calendarResult, context.timezone),
+      deterministicCalendarSummary(calendarResult, context.timezone, context.now),
     ].filter(Boolean);
     return {
       text: parts.join(' '),

@@ -86,7 +86,7 @@ describe('Gemini route orchestration', () => {
     });
     searchKnowledge.mockReturnValueOnce([]);
     const result = await handleFunctionCalling('key', '御社の資本金と今週の空き時間を教えて', [], [], provider, context, { generate, searchKnowledge });
-    expect(result.text).toContain('空き時間は7月12日 10:00〜7月12日 11:30');
+    expect(result.text).toContain('これからの空き時間は7月12日 10:00〜7月12日 11:30');
     expect(result.calendar?.availabilityProvided).toBe(true);
     expect(JSON.stringify(calls)).not.toContain('資本金');
   });
@@ -123,7 +123,7 @@ describe('Gemini route orchestration', () => {
       queriedRange: calendarResult.queriedRange,
     });
     const result = await handleFunctionCalling('key', '今週の空き時間を教えて', [], [], provider, context, { generate, searchKnowledge });
-    expect(result.text).toContain('空き時間は7月12日 10:00〜7月12日 11:30');
+    expect(result.text).toContain('これからの空き時間は7月12日 10:00〜7月12日 11:30');
     expect(result.calendar?.availabilityProvided).toBe(true);
     expect(query).toHaveBeenCalledOnce();
   });
@@ -133,9 +133,34 @@ describe('Gemini route orchestration', () => {
       events: [], availability: { free: [] }, queriedRange: calendarResult.queriedRange,
     });
     const result = await handleFunctionCalling('key', '今週の空き時間を教えて', [], [], provider, context, { generate, searchKnowledge });
-    expect(result.text).toContain('確認期間に空き時間はなかとよ');
+    expect(result.text).toContain('確認期間にこれからの空き時間はなかとよ');
     expect(result.calendar?.availabilityProvided).toBe(true);
     expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('does not expose availability slots that are entirely in the past', async () => {
+    query.mockResolvedValueOnce({
+      events: [], availability: { free: [{ start: '2026-07-11T04:00:00.000Z', end: '2026-07-11T06:00:00.000Z' }] },
+      queriedRange: calendarResult.queriedRange,
+    });
+    const result = await handleFunctionCalling('key', '今週の空き時間を教えて', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.text).toContain('これからの空き時間はなかとよ');
+    expect(result.text).not.toContain('13:00');
+    expect(result.calendar?.availabilityProvided).toBe(true);
+  });
+
+  it('clips an ongoing slot to now and preserves later future slots', async () => {
+    query.mockResolvedValueOnce({
+      events: [], availability: { free: [
+        { start: '2026-07-11T06:00:00.000Z', end: '2026-07-11T07:30:00.000Z' },
+        { start: '2026-07-11T08:00:00.000Z', end: '2026-07-11T09:00:00.000Z' },
+      ] },
+      queriedRange: calendarResult.queriedRange,
+    });
+    const result = await handleFunctionCalling('key', '今週の空き時間を教えて', [], [], provider, context, { generate, searchKnowledge });
+    expect(result.text).toContain('7月11日 15:49〜7月11日 16:30');
+    expect(result.text).toContain('7月11日 17:00〜7月11日 18:00');
+    expect(result.calendar?.availabilityProvided).toBe(true);
   });
 
   it.each(['明日の公開予定を教えて', '今週の空き時間を教えて'])('keeps deterministic Calendar wording natural: %s', async (message) => {
