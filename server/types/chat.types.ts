@@ -60,6 +60,23 @@ export interface ChatResponse {
   };
 }
 
+export interface RequestContext {
+  now: Date;
+  timezone: 'Asia/Tokyo';
+  locale: 'ja-JP';
+}
+
+export interface TemporalFact {
+  kind: 'current_date' | 'current_time' | 'current_year';
+  isoInstant: string;
+  timezone: 'Asia/Tokyo';
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}
+
 /**
  * Google Calendar イベント
  */

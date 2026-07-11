@@ -9,6 +9,7 @@ async function loadDefaultServices() {
     handleFunctionCalling: gemini.handleFunctionCalling,
     allowChatRequest: rateLimit.allowChatRequest,
     normalizeClientIp: rateLimit.normalizeClientIp,
+    ...await import('../server/dist/services/request-context.service.js'),
   };
 }
 
@@ -46,6 +47,7 @@ export function createChatHandler({
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
     const startedAt = now();
+    const requestInstant = new Date(startedAt);
     // An inbound id can contain phone numbers or other PII. Correlation ids are
     // always server-generated and returned to the caller for support use.
     const requestId = serverRequestId(createRequestId);
@@ -57,7 +59,7 @@ export function createChatHandler({
       attachments: body.attachments,
       conversationHistory: body.conversationHistory,
       timezone: body.timezone || 'Asia/Tokyo',
-      model: env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
+      model: env.GEMINI_MODEL || 'missing',
       startedAt,
     };
 
@@ -94,19 +96,34 @@ export function createChatHandler({
         return res.status(500).json({ error: 'サーバー設定エラー', message: 'API設定が不足しています。', emotion: 'sad' });
       }
 
+      try {
+        baseMetadata.model = services.getGeminiModel(env);
+      } catch {
+        logger.error('[API]', createRequestMetadata({ ...baseMetadata, now: now(), status: 500, errorCode: 'server_not_configured' }));
+        return res.status(500).json({ error: 'サーバー設定エラー', message: 'API設定が不足しています。', emotion: 'sad' });
+      }
+
+      let requestContext;
+      try {
+        requestContext = services.createRequestContext(requestInstant, body.timezone || 'Asia/Tokyo');
+      } catch {
+        logger.warn('[API]', createRequestMetadata({ ...baseMetadata, now: now(), status: 400, errorCode: 'invalid_request' }));
+        return res.status(400).json({ error: '未対応のタイムゾーンです', message: '日本時間で試してね。', emotion: 'sad' });
+      }
+
       const result = await services.handleFunctionCalling(
         env.GEMINI_API_KEY,
         normalizedMessage,
         body.attachments || [],
         body.conversationHistory || [],
         undefined,
-        body.timezone || 'Asia/Tokyo',
+        requestContext,
       );
       logger.info('[API]', createRequestMetadata({ ...baseMetadata, now: now(), status: 200 }));
       return res.status(200).json({
         message: result.text,
         emotion: result.emotion,
-        timestamp: new Date(now()),
+        timestamp: requestContext.now,
         action: result.action,
         calendar: result.calendar,
       });
