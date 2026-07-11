@@ -1,6 +1,6 @@
 import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isChatInputActive, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldKeepAvatarVisible } from './runtimeMath.js';
+import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, isChatInputActive, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldKeepAvatarVisible } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -32,6 +32,13 @@ describe('AR runtime math', () => {
     expect(isChatInputActive({ id: 'bottom-sheet-input' } as Element, false)).toBe(true);
     expect(isChatInputActive({ id: 'another-input' } as Element, true)).toBe(true);
     expect(isChatInputActive({ id: 'another-input' } as Element, false)).toBe(false);
+  });
+
+  it('classifies camera permission failures by DOMException name before message fallback', () => {
+    expect(isCameraPermissionError(new DOMException('localized message', 'NotAllowedError'))).toBe(true);
+    expect(isCameraPermissionError(new DOMException('localized message', 'SecurityError'))).toBe(true);
+    expect(isCameraPermissionError(new Error('Permission denied by browser'))).toBe(true);
+    expect(isCameraPermissionError(new DOMException('device unavailable', 'NotFoundError'))).toBe(false);
   });
 
   it('centers X/Z and places the feet on the marker plane', () => {
