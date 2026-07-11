@@ -86,7 +86,7 @@ describe('Gemini route orchestration', () => {
     expect(result.route).toBe('mixed');
     expect(query).toHaveBeenCalledOnce();
     expect(calls[calls.length - 1].system).toContain('[temporal]');
-    expect(calls[calls.length - 1].system).toContain('2026年7月11日15:49');
+    expect(calls[calls.length - 1].system).toContain('2026年7月11日、土曜日、15:49');
   });
 
   it('keeps company plus temporal intent off Calendar', async () => {
@@ -94,7 +94,7 @@ describe('Gemini route orchestration', () => {
     expect(result.route).toBe('mixed');
     expect(searchKnowledge).toHaveBeenCalledOnce();
     expect(query).not.toHaveBeenCalled();
-    expect(calls[calls.length - 1].system).toContain('2026年7月11日15:49');
+    expect(calls[calls.length - 1].system).toContain('2026年7月11日、土曜日、15:49');
   });
 
   it('keeps disclosure policy ahead of user history and prompt injection', async () => {

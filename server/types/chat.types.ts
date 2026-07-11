@@ -74,6 +74,7 @@ export interface TemporalFact {
   year: number;
   month: number;
   day: number;
+  weekday: string;
   hour: number;
   minute: number;
 }
