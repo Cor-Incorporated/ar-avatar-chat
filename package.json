@@ -12,7 +12,8 @@
     "type-check:server": "cd server && npm run type-check",
     "type-check:client": "tsc -p src/tsconfig.json --noEmit",
     "test:ar": "vitest run src/ar",
-    "test:api": "vitest run --root . api",
+    "test:api": "vitest run --root . tests/api",
+    "test:vercel-functions": "node scripts/assert-vercel-functions.mjs",
     "validate:vrma": "node scripts/validate-vrma.mjs"
   },
   "keywords": [

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createChatHandler } from './chat.js';
+import { createChatHandler } from '../../api/chat.js';
 
 function responseHarness() {
   return {

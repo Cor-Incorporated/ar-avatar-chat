@@ -1,6 +1,6 @@
 /** Vercel Serverless Function: /api/chat */
 import { randomUUID } from 'node:crypto';
-import { createRequestMetadata } from './request-metadata.js';
+import { createRequestMetadata } from '../server/lib/request-metadata.js';
 
 async function loadDefaultServices() {
   const gemini = await import('../server/dist/services/gemini.service.js');

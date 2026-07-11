@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRequestMetadata } from './request-metadata.js';
+import { createRequestMetadata } from '../../server/lib/request-metadata.js';
 
 describe('request log metadata', () => {
   it('contains operational counts without user or calendar content', () => {
