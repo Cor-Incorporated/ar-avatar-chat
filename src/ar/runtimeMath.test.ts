@@ -1,6 +1,6 @@
 import { BoxGeometry, Euler, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, isObjectSafelyInCameraView, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
+import { anchorAvatarToFeet, areViewportRectsStable, clampFrameDelta, coverProjectionScale, isCameraPermissionError, isObjectSafelyInCameraView, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -73,6 +73,23 @@ describe('AR runtime math', () => {
   it('keeps the AR renderer fixed while the iOS keyboard owns the visual viewport', () => {
     expect(shouldDeferViewportResize(true)).toBe(true);
     expect(shouldDeferViewportResize(false)).toBe(false);
+  });
+
+  it('allows at most one pixel of stage, video and canvas movement while typing', () => {
+    const before = [
+      { left: 0, top: 0, width: 390, height: 844 },
+      { left: 0, top: 0, width: 390, height: 844 },
+      { left: 0, top: 0, width: 390, height: 844 },
+    ];
+    const withinRoundingTolerance = before.map((rect) => ({
+      ...rect,
+      left: rect.left + 0.5,
+      height: rect.height - 1,
+    }));
+    const keyboardResized = before.map((rect) => ({ ...rect, height: 500 }));
+
+    expect(areViewportRectsStable(before, withinRoundingTolerance)).toBe(true);
+    expect(areViewportRectsStable(before, keyboardResized)).toBe(false);
   });
 
   it('classifies camera permission failures by DOMException name before message fallback', () => {

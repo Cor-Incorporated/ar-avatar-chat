@@ -11,6 +11,21 @@ export function shouldDeferViewportResize(keyboardOverlayActive: boolean): boole
   return keyboardOverlayActive;
 }
 
+export type RectSnapshot = Pick<DOMRectReadOnly, 'left' | 'top' | 'width' | 'height'>;
+
+export function areViewportRectsStable(
+  before: readonly RectSnapshot[],
+  after: readonly RectSnapshot[],
+  tolerancePx = 1,
+): boolean {
+  if (before.length !== after.length || tolerancePx < 0) return false;
+  return before.every((rect, index) => {
+    const next = after[index];
+    return next !== undefined && (['left', 'top', 'width', 'height'] as const)
+      .every((key) => Math.abs(rect[key] - next[key]) <= tolerancePx);
+  });
+}
+
 export function coverProjectionScale(
   videoWidth: number,
   videoHeight: number,

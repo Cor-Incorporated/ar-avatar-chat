@@ -13,7 +13,7 @@ import {
   ArToolkitSource,
 } from '@ar-js-org/ar.js/three.js/build/ar-threex.mjs';
 import { AvatarController } from './AvatarController.js';
-import { clampFrameDelta, coverProjectionScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
+import { areViewportRectsStable, clampFrameDelta, coverProjectionScale, type RectSnapshot, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
 
 export class ARRuntime extends EventTarget {
   readonly avatar = new AvatarController();
@@ -32,6 +32,7 @@ export class ARRuntime extends EventTarget {
   private lastMarkerVisible = false;
   private cameraParametersUrl: string | null = null;
   private keyboardOverlayActive = false;
+  private keyboardRectSnapshot: RectSnapshot[] | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     super();
@@ -46,6 +47,7 @@ export class ARRuntime extends EventTarget {
     key.position.set(1, 2, 1);
     this.scene.add(key);
     window.addEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
+    window.visualViewport?.addEventListener('resize', this.verifyKeyboardArRects);
   }
 
   async start(): Promise<void> {
@@ -212,11 +214,30 @@ export class ARRuntime extends EventTarget {
     const active = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
     const wasActive = this.keyboardOverlayActive;
     this.keyboardOverlayActive = active;
+    this.keyboardRectSnapshot = active ? this.captureArRects() : null;
     if (wasActive && !active) {
       // Reconcile once after Safari has restored its layout viewport.
       requestAnimationFrame(() => {
         if (!this.disposed) this.resize();
       });
+    }
+  };
+
+  private captureArRects(): RectSnapshot[] {
+    const stage = document.getElementById('ar-stage');
+    const video = this.source?.domElement;
+    if (!stage || !video) return [];
+    return [stage, video, this.canvas].map((element) => element.getBoundingClientRect());
+  }
+
+  private verifyKeyboardArRects = (): void => {
+    if (!this.keyboardOverlayActive || this.keyboardRectSnapshot?.length !== 3) return;
+    const current = this.captureArRects();
+    if (!areViewportRectsStable(this.keyboardRectSnapshot, current)) {
+      this.dispatchEvent(new CustomEvent('arlayoutshift', {
+        detail: { before: this.keyboardRectSnapshot, after: current },
+      }));
+      console.error('[AR] stage/video/canvas moved by more than 1px while the keyboard was visible');
     }
   };
 
@@ -262,6 +283,7 @@ export class ARRuntime extends EventTarget {
     window.removeEventListener('resize', this.handleViewportResize);
     window.removeEventListener('orientationchange', this.handleViewportResize);
     window.removeEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
+    window.visualViewport?.removeEventListener('resize', this.verifyKeyboardArRects);
     this.markerControls?.dispose?.();
     this.source?.dispose();
     if (this.cameraParametersUrl) URL.revokeObjectURL(this.cameraParametersUrl);
