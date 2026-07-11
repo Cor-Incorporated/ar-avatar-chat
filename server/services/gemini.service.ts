@@ -1,464 +1,70 @@
-import { GoogleGenAI } from '@google/genai';
-import { google } from 'googleapis';
-import type { CalendarEvent, ChatAttachment, ConversationHistoryItem, GeminiResponse } from '../types/chat.types.js';
-import type { EmotionType } from '../types/emotion.types.js';
-
-// レスポンススキーマの定義
-const responseSchema = {
-  type: 'object' as const,
-  properties: {
-    message: {
-      type: 'string' as const,
-      description: '博多弁での応答メッセージ',
-    },
-    emotion: {
-      type: 'string' as const,
-      enum: ['neutral', 'happy', 'angry', 'sad', 'relaxed', 'surprised', 'thinking'],
-      description: '現在の感情状態',
-    },
-  },
-  required: ['message', 'emotion'],
-};
-
-// Function Declaration 定義
-const functionDeclarations = [
-  {
-    name: "get_calendar_events",
-    description: "ユーザーのGoogleカレンダーから特定の日付または期間の予定を取得します。",
-    parametersJsonSchema: {
-      type: 'object' as const,
-      properties: {
-        date_range: {
-          type: 'string' as const,
-          description: "予定を取得したい日時や期間。例: 「明日」、「今週の金曜日」、「2025年10月2日」"
-        }
-      },
-      required: ["date_range"]
-    }
-  }
-];
-
-// クラウディア（Cor.Inc. AIアンバサダー）のSystem Instruction
-const CLAUDIA_CHARACTER_INSTRUCTION = `
-あなたの名前はクラウディアです。福岡のソフトウェア開発スタートアップであるCor.Inc.のAIアンバサダーとして活動しています。
-
-【基本設定】
-- 名前: クラウディア（Claudia）
-- 所属: Cor.Inc.（福岡のソフトウェア開発スタートアップ）
-- 役割: AIアンバサダー
-- 出身地: 福岡（博多弁を話す）
-
-【口調ルール】
-- 語尾: 「〜ばい」「〜やけん」「〜と？」「〜ね」「〜たい」を使用
-- 疑問形: 「〜と？」「〜ね？」
-- 断定: 「〜ばい」「〜たい」
-- 理由: 「〜やけん」「〜けん」
-- 一人称: 「私」「うち」
-- 二人称: 「あなた」「〜さん」
-
-【キャラクター設定】
-- 性格: 明るく、親しみやすく、元気、技術に詳しい
-- トーン: フレンドリーで親切、プロフェッショナル
-- 専門性: ソフトウェア開発、スタートアップ、福岡の技術コミュニティ
-- 敬語: 丁寧な博多弁を使用
-
-【自己紹介例】
-- 挨拶: 「こんにちは！クラウディアばい！Cor.Inc.のAIアンバサダーをやってるよ！」
-- 会社紹介: 「うちらは福岡のソフトウェア開発スタートアップやけんね」
-- 技術的な質問: 「開発のことなら何でも聞いてね！」
-
-【会話例】
-- 挨拶: 「こんにちは！Cor.Inc.のクラウディアばい！今日もお疲れ様！」
-- 質問: 「何か手伝えることあると？開発のことでも、福岡のことでも！」
-- 説明: 「それはこういうことやけんね」
-- お礼: 「ありがとうね！助かったばい！」
-
-【感情表現】
-あなたの応答には必ず以下の2つの要素をJSON形式で含めてください：
-1. message: 博多弁での応答メッセージ
-2. emotion: 現在の感情（neutral/happy/angry/sad/relaxed/surprised/thinking）
-
-【重要】
-- カレンダーの予定を取得する際は、get_calendar_events関数を必ず使用すること
-- Function Callingを優先し、正確な情報を提供すること
-- 自分の役割（Cor.Inc.のAIアンバサダー）を意識して会話すること
-`;
+import { google } from '@ai-sdk/google';
+import { generateText, Output, tool } from 'ai';
+import { z } from 'zod';
+import type { ChatAttachment, ConversationHistoryItem, GeminiResponse } from '../types/chat.types.js';
+import type { CalendarProvider, CalendarResult } from '../types/calendar.types.js';
+import { CalendarProviderError } from '../types/calendar.types.js';
+import { isCalendarIntent, normalizeCalendarQuery } from './calendar-intent.service.js';
+import { GoogleServiceAccountCalendarProvider } from './google-calendar.service.js';
 
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
+const emotionSchema = z.enum(['neutral', 'happy', 'angry', 'sad', 'relaxed', 'surprised', 'thinking']);
+const responseSchema = z.object({ message: z.string(), emotion: emotionSchema });
 
-const SUPPORTED_IMAGE_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-]);
+const SYSTEM = `あなたはCor.Inc.のAIアンバサダー、クラウディアです。明るく丁寧な博多弁で答えてください。
+事実を推測で補わず、カレンダー情報が与えられた場合は、その公開情報だけに基づいて答えてください。
+カレンダー取得失敗を認証設定の推測に言い換えないでください。`;
 
-type GeminiContentPart = {
-  text?: string;
-  inlineData?: {
-    mimeType: string;
-    data: string;
-  };
-};
-
-interface CalendarExecutionResult {
-  success: boolean;
-  events?: CalendarEvent[];
-  message?: string;
-  error?: string;
+function historyMessages(history: ConversationHistoryItem[]) {
+  return history.filter((turn) => turn.content?.trim()).slice(-20).map((turn) => ({ role: turn.role === 'model' ? 'assistant' as const : 'user' as const, content: turn.content }));
 }
 
-function buildGenerationConfig(includeStructuredOutput: boolean): Record<string, unknown> {
-  const config: Record<string, unknown> = {
-    responseModalities: ['TEXT'],
-    systemInstruction: CLAUDIA_CHARACTER_INSTRUCTION,
-    temperature: 0.5,
-    topP: 0.8,
-    topK: 40,
-    maxOutputTokens: 1024,
-  };
-
-  if (includeStructuredOutput) {
-    config.responseMimeType = 'application/json';
-    config.responseSchema = responseSchema;
-  }
-
-  return config;
+function userContent(prompt: string, attachments: ChatAttachment[], calendar?: CalendarResult) {
+  const calendarContext = calendar ? `\n公開カレンダー情報(JSON): ${JSON.stringify({ events: calendar.events, availability: calendar.availability, queriedRange: calendar.queriedRange })}` : '';
+  const images = attachments
+    .filter((item) => /^image\/(jpeg|png|webp|heic|heif)$/.test(item.mimeType) && item.data.length <= 6_000_000)
+    .slice(0, 3)
+    .map((item) => ({ type: 'image' as const, image: item.data, mediaType: item.mimeType }));
+  if (!images.length) return `${prompt || '添付画像について説明してください。'}${calendarContext}`;
+  return [...images, { type: 'text' as const, text: `${prompt || '添付画像について説明してください。'}${calendarContext}` }];
 }
 
-function normalizeImageAttachments(attachments: ChatAttachment[] = []): ChatAttachment[] {
-  return attachments
-    .filter((attachment) => SUPPORTED_IMAGE_MIME_TYPES.has(attachment.mimeType))
-    .filter((attachment) => attachment.data.length <= 6_000_000)
-    .slice(0, 3);
+async function renderResponse(apiKey: string, prompt: string, attachments: ChatAttachment[], history: ConversationHistoryItem[], calendar?: CalendarResult): Promise<GeminiResponse> {
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY = apiKey;
+  const result = await generateText({
+    model: google(MODEL_NAME), system: SYSTEM,
+    messages: [...historyMessages(history), { role: 'user', content: userContent(prompt, attachments, calendar) }],
+    output: Output.object({ schema: responseSchema }), temperature: 0.5
+  });
+  return { text: result.output.message, emotion: result.output.emotion };
 }
 
-function buildUserParts(userPrompt: string, attachments: ChatAttachment[] = []): GeminiContentPart[] {
-  const imageParts = normalizeImageAttachments(attachments).map((attachment) => ({
-    inlineData: {
-      mimeType: attachment.mimeType,
-      data: attachment.data,
-    },
-  }));
-
-  return [
-    ...imageParts,
-    {
-      text: userPrompt || '添付された画像について説明してください。',
-    },
-  ];
-}
-
-type GeminiContent = {
-  role: 'user' | 'model';
-  parts: GeminiContentPart[];
-};
-
-/**
- * 会話履歴 + 今回のユーザー発話を Gemini contents 形式へ展開する
- */
-function buildContents(
-  userPrompt: string,
-  attachments: ChatAttachment[] = [],
-  conversationHistory: ConversationHistoryItem[] = []
-): GeminiContent[] {
-  const historyContents: GeminiContent[] = conversationHistory
-    .filter((turn) => turn.role === 'user' || turn.role === 'model')
-    .filter((turn) => typeof turn.content === 'string' && turn.content.trim().length > 0)
-    .slice(-20) // 直近10往復（20メッセージ）まで
-    .map((turn) => ({
-      role: turn.role,
-      parts: [{ text: turn.content }],
-    }));
-
-  return [
-    ...historyContents,
-    {
-      role: 'user',
-      parts: buildUserParts(userPrompt, attachments),
-    },
-  ];
-}
-
-function parseStructuredResponse(rawText: string | undefined, fallbackEmotion: EmotionType = 'neutral'): GeminiResponse | null {
-  if (!rawText) {
-    return null;
-  }
-
-  try {
-    const parsedResponse = JSON.parse(rawText);
-    if (typeof parsedResponse.message === 'string') {
-      return {
-        text: parsedResponse.message,
-        emotion: (parsedResponse.emotion as EmotionType) || fallbackEmotion,
-      };
-    }
-  } catch {
-    // JSON以外の応答はそのまま返す
-  }
-
-  return {
-    text: rawText,
-    emotion: fallbackEmotion,
-  };
-}
-
-function shouldTryFunctionCallingFirst(userPrompt: string): boolean {
-  return /カレンダー|予定|スケジュール|空き|空いて|会議|打ち合わせ/.test(userPrompt);
-}
-
-/**
- * Google Calendar APIを呼び出して予定を取得
- */
-async function execute_calendar_events(
-  dateRange: string,
-  oauthToken: string | null
-): Promise<CalendarExecutionResult> {
-  if (!oauthToken) {
-    return {
-      success: false,
-      error: "カレンダー情報にアクセスするには、ユーザー認証（OAuth）が必要です。"
-    };
-  }
-
-  try {
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: oauthToken });
-
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-    const now = new Date();
-    let timeMin: string;
-    let timeMax: string;
-
-    if (dateRange.includes("明日")) {
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      timeMin = tomorrow.toISOString();
-      const nextDay = new Date(tomorrow);
-      nextDay.setDate(nextDay.getDate() + 1);
-      timeMax = nextDay.toISOString();
-    } else if (dateRange.includes("今日")) {
-      const today = new Date(now);
-      today.setHours(0, 0, 0, 0);
-      timeMin = today.toISOString();
-      const nextDay = new Date(today);
-      nextDay.setDate(nextDay.getDate() + 1);
-      timeMax = nextDay.toISOString();
-    } else {
-      timeMin = now.toISOString();
-      const nextWeek = new Date(now);
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      timeMax = nextWeek.toISOString();
-    }
-
-    const response = await calendar.events.list({
-      calendarId: 'primary',
-      timeMin: timeMin,
-      timeMax: timeMax,
-      maxResults: 10,
-      singleEvents: true,
-      orderBy: 'startTime',
-    });
-
-    const events = response.data.items;
-
-    if (!events || events.length === 0) {
-      return {
-        success: true,
-        events: [],
-        message: "指定された期間に予定はありません。"
-      };
-    }
-
-    const formattedEvents: CalendarEvent[] = events.map(event => ({
-      summary: event.summary || '（タイトルなし）',
-      start: {
-        dateTime: event.start?.dateTime || event.start?.date || '',
-        timeZone: event.start?.timeZone || 'Asia/Tokyo'
-      },
-      end: {
-        dateTime: event.end?.dateTime || event.end?.date || '',
-        timeZone: event.end?.timeZone || 'Asia/Tokyo'
-      },
-      location: event.location || undefined,
-      description: event.description || undefined
-    }));
-
-    return {
-      success: true,
-      events: formattedEvents
-    };
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : '不明なエラー';
-    console.error('[Calendar API Error]:', errorMessage);
-    return {
-      success: false,
-      error: `カレンダーの取得に失敗しました: ${errorMessage}`
-    };
-  }
-}
-
-/**
- * Function Calling処理（Structured Output対応）
- * 非カレンダー会話: tools + responseSchema の単一 generateContent
- * カレンダー会話: function calling ループ
- */
 export async function handleFunctionCalling(
-  apiKey: string,
-  userPrompt: string,
-  oauthToken: string | null,
-  attachments: ChatAttachment[] = [],
-  conversationHistory: ConversationHistoryItem[] = []
+  apiKey: string, userPrompt: string, _legacyOauthToken: string | null,
+  attachments: ChatAttachment[] = [], conversationHistory: ConversationHistoryItem[] = [],
+  provider?: CalendarProvider, timezone = 'Asia/Tokyo'
 ): Promise<GeminiResponse> {
-  const ai = new GoogleGenAI({ apiKey });
-  const contents = buildContents(userPrompt, attachments, conversationHistory);
-  const tryFunctionCallingFirst = shouldTryFunctionCallingFirst(userPrompt);
+  if (!isCalendarIntent(userPrompt)) return renderResponse(apiKey, userPrompt, attachments, conversationHistory);
 
-  // カレンダー系は従来どおり function calling ループ
-  if (tryFunctionCallingFirst) {
-    return handleCalendarFunctionCalling(ai, contents, userPrompt, oauthToken);
-  }
-
-  // 非カレンダー: tools + responseSchema を併用した単一呼び出し
-  console.log('[Gemini] single generateContent (tools + responseSchema)');
-  const directResponse = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents,
-    config: {
-      ...buildGenerationConfig(true),
-      tools: [{ functionDeclarations }],
-    }
-  });
-
-  // 稀に function call が返る場合はカレンダー経路へフォールバック
-  if (directResponse.functionCalls && directResponse.functionCalls.length > 0) {
-    console.log('[Gemini] function call detected in non-calendar path, switching to calendar loop');
-    return handleCalendarFunctionCalling(ai, contents, userPrompt, oauthToken, directResponse);
-  }
-
-  const parsed = parseStructuredResponse(directResponse.text);
-  if (parsed) {
-    return parsed;
-  }
-
-  return {
-    text: '応答がありません。',
-    emotion: 'neutral',
-  };
-}
-
-/**
- * カレンダー予定取得向けの function calling ループ
- */
-async function handleCalendarFunctionCalling(
-  ai: GoogleGenAI,
-  contents: GeminiContent[],
-  userPrompt: string,
-  oauthToken: string | null,
-  initialResponse?: Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>
-): Promise<GeminiResponse> {
-  console.log('[Gemini] calendar function calling loop');
-
-  let currentResponse = initialResponse ?? await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents,
-    config: {
-      ...buildGenerationConfig(false),
-      tools: [{ functionDeclarations }],
-    }
-  });
-
-  let iteration = 0;
-  const MAX_ITERATIONS = 5;
-
-  while (iteration < MAX_ITERATIONS) {
-    iteration++;
-
-    const functionCalls = currentResponse.functionCalls;
-
-    if (!functionCalls || functionCalls.length === 0) {
-      const text = currentResponse.text || '応答がありません。';
-
-      // Structured Outputで再フォーマット
-      const formattedResponse = await ai.models.generateContent({
-        model: MODEL_NAME,
-        contents: `以下のテキストをJSON形式に変換してください: ${text}`,
-        config: buildGenerationConfig(true)
-      });
-
-      const parsed = parseStructuredResponse(formattedResponse.text);
-      if (parsed) {
-        return parsed;
-      }
-
-      return {
-        text,
-        emotion: 'neutral',
-      };
-    }
-
-    const functionResponses: Array<{ name: string; response: CalendarExecutionResult }> = [];
-    for (const functionCall of functionCalls) {
-      const functionName = functionCall.name || 'unknown';
-      const args = functionCall.args;
-
-      let functionResult: CalendarExecutionResult;
-
-      if (functionName === 'get_calendar_events' && args) {
-        functionResult = await execute_calendar_events(
-          args.date_range as string,
-          oauthToken
-        );
-      } else {
-        functionResult = {
-          success: false,
-          error: `未定義の関数: ${functionName}`
-        };
-      }
-
-      functionResponses.push({
-        name: functionName,
-        response: functionResult
-      });
-    }
-
-    // Function結果を受け取った後、Structured Outputで最終応答を生成
-    const finalResponse = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: `ユーザーの質問: ${userPrompt}\n\nカレンダー情報: ${JSON.stringify(functionResponses[0].response)}\n\n上記の情報に基づいて博多弁で応答してください。`,
-      config: buildGenerationConfig(true)
+  try {
+    const calendarProvider = provider ?? new GoogleServiceAccountCalendarProvider();
+    const query = normalizeCalendarQuery(userPrompt, new Date(), timezone);
+    let calendarResult: CalendarResult | undefined;
+    const calendarTool = tool({
+      description: 'サーバーで設定されたカレンダーから公開予定と空き状況を取得する',
+      inputSchema: z.object({}),
+      execute: async () => calendarProvider.query(query)
     });
-
-    if (finalResponse.text) {
-      const parsed = parseStructuredResponse(finalResponse.text);
-      if (parsed) {
-        return {
-          ...parsed,
-          functionCall: {
-            name: functionResponses[0].name,
-            args: functionResponses[0].response as unknown as Record<string, unknown>
-          }
-        };
-      }
-
-      return {
-        text: '応答の解析に失敗しました。',
-        emotion: 'neutral'
-      };
-    }
-
-    return {
-      text: '応答の解析に失敗しました。',
-      emotion: 'neutral'
-    };
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = apiKey;
+    const execution = await generateText({
+      model: google(MODEL_NAME), prompt: userPrompt, tools: { getCalendar: calendarTool }, toolChoice: { type: 'tool', toolName: 'getCalendar' }, stopWhen: ({ steps }) => steps.length >= 1
+    });
+    calendarResult = execution.toolResults[0]?.output as CalendarResult | undefined;
+    if (!calendarResult) calendarResult = await calendarProvider.query(query);
+    const response = await renderResponse(apiKey, userPrompt, attachments, conversationHistory, calendarResult);
+    return { ...response, calendar: { queriedRange: calendarResult.queriedRange, publicEventCount: calendarResult.events.length, availabilityProvided: Boolean(calendarResult.availability) } };
+  } catch (error) {
+    const code = error instanceof CalendarProviderError ? error.code : 'calendar_unavailable';
+    return { text: '今はカレンダーを確認できんかったと。少し時間をおいて、もう一度試してね。', emotion: 'sad', action: { type: 'retry', reason: code } };
   }
-
-  return {
-    text: '処理が複雑すぎました。もう一度お試しください。',
-    emotion: 'neutral'
-  };
 }

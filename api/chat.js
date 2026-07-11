@@ -28,11 +28,12 @@ export default async function handler(req, res) {
     console.log('[API] 履歴ターン数:', Array.isArray(req.body?.conversationHistory) ? req.body.conversationHistory.length : 0);
     
     // 動的インポート（Vercel環境用）
-    let handleFunctionCalling;
+    let handleFunctionCalling, allowChatRequest;
     try {
       console.log('[API] Geminiサービスをインポート中...');
       const module = await import('../server/dist/services/gemini.service.js');
       handleFunctionCalling = module.handleFunctionCalling;
+      ({ allowChatRequest } = await import('../server/dist/services/rate-limit.service.js'));
       console.log('[API] インポート成功');
     } catch (importError) {
       console.error('[API] インポートエラー詳細:', importError.message, importError.stack);
@@ -44,7 +45,12 @@ export default async function handler(req, res) {
       return;
     }
     
-    const { message, oauthToken, attachments, conversationHistory } = req.body;
+    const { message, timezone, attachments, conversationHistory } = req.body;
+    const clientKey = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    if (!allowChatRequest(clientKey)) {
+      res.status(429).json({ error: 'リクエストが多すぎます', message: '少し時間をおいて試してね。', emotion: 'sad' });
+      return;
+    }
     const normalizedMessage = typeof message === 'string' ? message.trim() : '';
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
@@ -68,9 +74,11 @@ export default async function handler(req, res) {
     const result = await handleFunctionCalling(
       process.env.GEMINI_API_KEY,
       normalizedMessage,
-      oauthToken || null,
+      null,
       attachments || [],
-      conversationHistory || []
+      conversationHistory || [],
+      undefined,
+      timezone || 'Asia/Tokyo'
     );
 
     console.log('[API] Gemini応答:', result);
@@ -78,7 +86,9 @@ export default async function handler(req, res) {
     res.status(200).json({
       message: result.text,
       emotion: result.emotion,
-      timestamp: new Date()
+      timestamp: new Date(),
+      action: result.action,
+      calendar: result.calendar
     });
 
   } catch (error) {
