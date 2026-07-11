@@ -33,6 +33,7 @@ export class BottomSheet {
   private messages: ChatMessage[] = [];
   private pendingAttachment: ChatAttachment | null = null;
   private sending = false;
+  private keyboardOverlayActive = false;
   private retryCallback: (() => void) | null = null;
   private onSendMessage: ((payload: MessageSendPayload) => void) | null = null;
   private readonly listenerController = new AbortController();
@@ -118,6 +119,7 @@ export class BottomSheet {
     }, options);
     this.inputElement.addEventListener('focus', () => {
       this.container?.classList.add('keyboard-visible');
+      this.setKeyboardOverlayActive(true);
       this.syncViewportMetrics();
     }, options);
     this.inputElement.addEventListener('blur', () => {
@@ -126,6 +128,7 @@ export class BottomSheet {
         this.blurTimer = null;
         if (document.activeElement !== this.inputElement) {
           this.container?.classList.remove('keyboard-visible');
+          this.setKeyboardOverlayActive(false);
           this.syncViewportMetrics();
         }
       }, 100);
@@ -150,6 +153,17 @@ export class BottomSheet {
       this.container.style.setProperty('--chat-controls-height', `${height}px`);
     }
   };
+
+  /** 旧AR marker-graceとの互換signal。レイアウト補正には使用しない。 */
+  private setKeyboardOverlayActive(active: boolean, forceDispatch = false): void {
+    const changed = this.keyboardOverlayActive !== active;
+    this.keyboardOverlayActive = active;
+    document.documentElement.classList.toggle('keyboard-overlay-active', active);
+    document.body.classList.toggle('keyboard-overlay-active', active);
+    if (changed || forceDispatch) {
+      window.dispatchEvent(new CustomEvent('ar-keyboard-overlay-change', { detail: { active } }));
+    }
+  }
 
   private updateStateClass(): void {
     if (!this.container) return;
@@ -460,6 +474,7 @@ export class BottomSheet {
 
   /** SPAの再初期化やテスト時にグローバルlistenerとDOMを確実に解放する。 */
   public destroy(): void {
+    this.setKeyboardOverlayActive(false, true);
     this.listenerController.abort();
     if (this.blurTimer !== null) window.clearTimeout(this.blurTimer);
     if (this.liveRegionTimer !== null) window.clearTimeout(this.liveRegionTimer);
