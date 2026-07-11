@@ -12,7 +12,7 @@ interface AvatarEmotionController {
 export class ChatController {
   private bottomSheet: BottomSheet;
   private apiEndpoint: string;
-  private avatarController: AvatarEmotionController | null = null;
+  private avatarController: AvatarEmotionController | null;
   private destroyed = false;
 
   constructor(
@@ -68,7 +68,7 @@ export class ChatController {
       }
 
       // 感情に応じたアニメーション再生
-      if (data.emotion) this.avatarController?.playEmotion(data.emotion);
+      if (data.emotion) this.playEmotion(data.emotion);
 
     } catch (error) {
       console.error('[Chat Controller] エラー:', error);
@@ -76,7 +76,7 @@ export class ChatController {
       this.bottomSheet.showError('通信に失敗しました。接続を確認して再試行してください。', () => void this.sendMessage(payload));
 
       // エラー時はsad感情を表示
-      this.avatarController?.playEmotion('sad');
+      this.playEmotion('sad');
     }
   }
 
@@ -85,6 +85,16 @@ export class ChatController {
    */
   public getBottomSheet(): BottomSheet {
     return this.bottomSheet;
+  }
+
+  private playEmotion(emotion: string): void {
+    if (this.avatarController) {
+      this.avatarController.playEmotion(emotion);
+      return;
+    }
+    // origin/dev単体との後方互換。新AR runtimeではconstructor DIを使用する。
+    const legacyPlayEmotion = (window as typeof window & { playEmotion?: (value: string) => void }).playEmotion;
+    legacyPlayEmotion?.(emotion);
   }
 
   public destroy(): void {
