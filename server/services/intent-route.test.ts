@@ -22,6 +22,14 @@ describe('intent route classifier', () => {
     expect(classifyIntentRoute(message)).toEqual({ route: 'ordinary', signals: [] });
   });
 
+  it.each(['予約したい', 'サービスの予約方法を教えて', '採用説明会はいつ？', '採用面談の日程は？'])('keeps non-calendar operational questions ordinary: %s', (message) => {
+    expect(classifyIntentRoute(message)).toEqual({ route: 'ordinary', signals: [] });
+  });
+
+  it('treats company roadmap language as company knowledge, not Calendar', () => {
+    expect(classifyIntentRoute('会社の今後の予定を教えて')).toEqual({ route: 'company', signals: ['company'] });
+  });
+
   it.each(['明日の公開予定を教えて', '今週の空き時間は？'])('routes explicit calendar queries: %s', (message) => {
     expect(classifyIntentRoute(message).route).toBe('calendar');
   });

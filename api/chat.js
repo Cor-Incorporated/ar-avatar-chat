@@ -25,9 +25,11 @@ function exposeDeploymentCommit(res, commitSha) {
   }
 }
 
-function safeRequestId(value, fallback) {
-  const candidate = typeof value === 'string' ? value : '';
-  return /^[A-Za-z0-9._:-]{1,128}$/.test(candidate) ? candidate : fallback();
+function serverRequestId(factory) {
+  const candidate = factory();
+  return typeof candidate === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(candidate)
+    ? candidate
+    : randomUUID();
 }
 
 export function createChatHandler({
@@ -44,7 +46,10 @@ export function createChatHandler({
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
     const startedAt = now();
-    const requestId = safeRequestId(req.headers?.['x-request-id'], createRequestId);
+    // An inbound id can contain phone numbers or other PII. Correlation ids are
+    // always server-generated and returned to the caller for support use.
+    const requestId = serverRequestId(createRequestId);
+    res.setHeader('X-Request-ID', requestId);
     const body = req.body || {};
     const baseMetadata = {
       requestId,

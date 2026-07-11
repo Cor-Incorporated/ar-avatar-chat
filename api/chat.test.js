@@ -74,18 +74,21 @@ describe('/api/chat boundary harness', () => {
     expect(JSON.stringify(logger.error.mock.calls)).not.toContain('SECRET');
   });
 
-  it('does not trust user-controlled request ids or timezone values in logs', async () => {
+  it('does not trust phone-like request ids or timezone values in logs', async () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const handler = createChatHandler({
       loadServices: async () => dependencies(), env: { GEMINI_API_KEY: 'test-key' },
       logger, createRequestId: () => 'generated-safe-id',
     });
     const req = request({ message: 'hello', timezone: 'SECRET/TIMEZONE' });
-    req.headers['x-request-id'] = 'SECRET REQUEST ID';
-    await handler(req, responseHarness());
+    req.headers['x-request-id'] = '09012345678';
+    const res = responseHarness();
+    await handler(req, res);
     const serialized = JSON.stringify(logger.info.mock.calls);
     expect(serialized).toContain('generated-safe-id');
     expect(serialized).toContain('unsupported');
     expect(serialized).not.toContain('SECRET');
+    expect(serialized).not.toContain('09012345678');
+    expect(res.headers['X-Request-ID']).toBe('generated-safe-id');
   });
 });
