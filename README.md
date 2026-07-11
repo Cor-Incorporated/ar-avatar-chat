@@ -298,6 +298,10 @@ Phase 1はリサーチャーの調査結果に依存しないため、**並行�
 - **TypeScript**: 5.9.3
 - **モダンUI**: BottomSheet コンポーネント
 
+`package.json` の Axios override は、AR.js 3.4.8 が推移依存で固定する
+Axios 1.13.1を、[GHSA-43fc-jf86-j433](https://github.com/advisories/GHSA-43fc-jf86-j433)
+などの修正を含む互換版へ固定するためのものです。監査確認なしに削除しないでください。
+
 ### バックエンド
 - **Node.js**: 18+
 - **Express**: 5.1.0
