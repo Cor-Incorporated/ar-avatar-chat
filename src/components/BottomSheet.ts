@@ -32,6 +32,9 @@ export class BottomSheet {
   private sending = false;
   private retryCallback: (() => void) | null = null;
   private onSendMessage: ((payload: MessageSendPayload) => void) | null = null;
+  private readonly listenerController = new AbortController();
+  private blurTimer: number | null = null;
+  private liveRegionTimer: number | null = null;
 
   constructor() {
     this.createBottomSheet();
@@ -95,34 +98,37 @@ export class BottomSheet {
       return;
     }
 
+    const options = { signal: this.listenerController.signal };
     this.inputContainer.addEventListener('submit', (event) => {
       event.preventDefault();
       this.handleSend();
-    });
-    this.attachButton.addEventListener('click', () => this.fileInputElement?.click());
-    this.cameraButton.addEventListener('click', () => void this.handleCameraCapture());
-    this.fileInputElement.addEventListener('change', () => void this.handleFileSelection());
+    }, options);
+    this.attachButton.addEventListener('click', () => this.fileInputElement?.click(), options);
+    this.cameraButton.addEventListener('click', () => void this.handleCameraCapture(), options);
+    this.fileInputElement.addEventListener('change', () => void this.handleFileSelection(), options);
     this.retryButton.addEventListener('click', () => {
       const retry = this.retryCallback;
       this.clearError();
       retry?.();
-    });
+    }, options);
     this.inputElement.addEventListener('focus', () => {
       this.container?.classList.add('keyboard-visible');
       this.syncViewportMetrics();
-    });
+    }, options);
     this.inputElement.addEventListener('blur', () => {
-      window.setTimeout(() => {
+      if (this.blurTimer !== null) window.clearTimeout(this.blurTimer);
+      this.blurTimer = window.setTimeout(() => {
+        this.blurTimer = null;
         if (document.activeElement !== this.inputElement) {
           this.container?.classList.remove('keyboard-visible');
           this.syncViewportMetrics();
         }
       }, 100);
-    });
+    }, options);
 
-    window.visualViewport?.addEventListener('resize', this.syncViewportMetrics);
-    window.visualViewport?.addEventListener('scroll', this.syncViewportMetrics);
-    window.addEventListener('resize', this.syncViewportMetrics);
+    window.visualViewport?.addEventListener('resize', this.syncViewportMetrics, options);
+    window.visualViewport?.addEventListener('scroll', this.syncViewportMetrics, options);
+    window.addEventListener('resize', this.syncViewportMetrics, options);
   }
 
   /** visual viewport下端までの距離をUIにだけ適用する。 */
@@ -300,8 +306,14 @@ export class BottomSheet {
   private renderMessages(): void {
     if (!this.messagesContainer) return;
     const count = this.state === 'expanded' ? 10 : 2;
+    this.messagesContainer.setAttribute('aria-live', 'off');
     this.messagesContainer.innerHTML = this.messages.slice(-count).map((message) => this.createMessageBubble(message)).join('');
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    if (this.liveRegionTimer !== null) window.clearTimeout(this.liveRegionTimer);
+    this.liveRegionTimer = window.setTimeout(() => {
+      this.liveRegionTimer = null;
+      this.messagesContainer?.setAttribute('aria-live', 'polite');
+    }, 0);
   }
 
   private createMessageBubble(message: ChatMessage): string {
@@ -344,9 +356,17 @@ export class BottomSheet {
 
   public addMessage(role: 'user' | 'assistant', content: string): void {
     this.messages.push({ role, content, timestamp: new Date() });
-    if (this.state === 'collapsed') this.state = 'peek';
+    const wasCollapsed = this.state === 'collapsed';
+    if (wasCollapsed) this.state = 'peek';
     this.updateStateClass();
-    this.renderMessages();
+    if (!wasCollapsed && this.messagesContainer) {
+      this.messagesContainer.insertAdjacentHTML('beforeend', this.createMessageBubble(this.messages.at(-1)!));
+      const count = this.state === 'expanded' ? 10 : 2;
+      while (this.messagesContainer.children.length > count) this.messagesContainer.firstElementChild?.remove();
+      this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    } else {
+      this.renderMessages();
+    }
   }
 
   public showTyping(): void {
@@ -372,11 +392,20 @@ export class BottomSheet {
   public setSending(sending: boolean): void {
     this.sending = sending;
     this.container?.classList.toggle('is-sending', sending);
+    this.inputContainer?.setAttribute('aria-busy', String(sending));
     if (this.sendButton) {
       this.sendButton.disabled = sending;
       this.sendButton.textContent = sending ? '送信中' : '送信';
     }
-    if (this.inputElement) this.inputElement.disabled = sending;
+    if (this.inputElement) {
+      // disabledはiOSでフォーカスを失いキーボードを閉じるためreadonlyを使う。
+      this.inputElement.readOnly = sending;
+      this.inputElement.setAttribute('aria-disabled', String(sending));
+    }
+    if (this.attachButton) this.attachButton.disabled = sending;
+    if (this.cameraButton) this.cameraButton.disabled = sending;
+    if (this.fileInputElement) this.fileInputElement.disabled = sending;
+    if (this.retryButton) this.retryButton.disabled = sending;
   }
 
   /** エラーを操作位置の隣に表示し、必要なら再試行を提供する。 */
@@ -402,5 +431,17 @@ export class BottomSheet {
 
   public getState(): BottomSheetState {
     return this.state;
+  }
+
+  /** SPAの再初期化やテスト時にグローバルlistenerとDOMを確実に解放する。 */
+  public destroy(): void {
+    this.listenerController.abort();
+    if (this.blurTimer !== null) window.clearTimeout(this.blurTimer);
+    if (this.liveRegionTimer !== null) window.clearTimeout(this.liveRegionTimer);
+    this.retryCallback = null;
+    this.onSendMessage = null;
+    this.container?.remove();
+    this.container = null;
+    this.messagesContainer = null;
   }
 }

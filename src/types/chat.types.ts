@@ -43,6 +43,12 @@ export interface ChatAPIResponse {
   message: string;
   emotion: EmotionType;
   timestamp: string;
+  action?: { type: 'retry'; reason: string };
+  calendar?: {
+    queriedRange: { start: string; end: string; timezone: string };
+    publicEventCount: number;
+    availabilityProvided: boolean;
+  };
 }
 
 /**
