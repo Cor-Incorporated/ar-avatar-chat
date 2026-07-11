@@ -18,8 +18,8 @@
       #ar-stage, #ar-canvas, #arjs-video {
         position: fixed !important;
         inset: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
+        width: var(--ar-layout-width, 100%) !important;
+        height: var(--ar-layout-height, 100%) !important;
         margin: 0 !important;
       }
       #ar-stage { z-index: 0; overflow: hidden; }

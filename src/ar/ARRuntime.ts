@@ -1,32 +1,34 @@
 import {
   AmbientLight,
+  Box3,
+  BoxGeometry,
   Clock,
   DirectionalLight,
+  Mesh,
+  MeshBasicMaterial,
   PerspectiveCamera,
   Scene,
+  Vector3,
   WebGLRenderer,
 } from 'three';
 import {
   ArMarkerControls,
-  ArSmoothedControls,
   ArToolkitContext,
   ArToolkitSource,
 } from '@ar-js-org/ar.js/three.js/build/ar-threex.mjs';
 import { AvatarController } from './AvatarController.js';
-import { clampFrameDelta, coverProjectionScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
+import { clampFrameDelta, coverProjectionScale, shouldDeferViewportResize } from './runtimeMath.js';
 
 export class ARRuntime extends EventTarget {
   readonly avatar = new AvatarController();
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera();
   private readonly markerRoot = new Scene();
-  private readonly smoothedRoot = new Scene();
   private readonly renderer: WebGLRenderer;
   private readonly clock = new Clock(false);
   private source: ArToolkitSource | null = null;
   private context: ArToolkitContext | null = null;
   private markerControls: ArMarkerControls | null = null;
-  private smoothedControls: ArSmoothedControls | null = null;
   private frame = 0;
   private disposed = false;
   private lastMarkerVisible = false;
@@ -37,10 +39,9 @@ export class ARRuntime extends EventTarget {
     super();
     this.renderer = new WebGLRenderer({ canvas, alpha: true, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.scene.add(this.camera, this.markerRoot, this.smoothedRoot);
+    this.scene.add(this.camera, this.markerRoot);
     this.markerRoot.visible = false;
-    this.smoothedRoot.visible = false;
-    this.smoothedRoot.add(this.avatar.root);
+    this.markerRoot.add(this.avatar.root);
     this.scene.add(new AmbientLight(0xffffff, 1));
     const key = new DirectionalLight(0xffffff, 0.8);
     key.position.set(1, 2, 1);
@@ -100,11 +101,15 @@ export class ARRuntime extends EventTarget {
       size: 1,
       minConfidence: 0.35,
     });
-    this.smoothedControls = new ArSmoothedControls(this.smoothedRoot, {
-      lerpPosition: 0.45,
-      lerpQuaternion: 0.35,
-      lerpScale: 0.6,
-    });
+    if (new URLSearchParams(location.search).get('debug') === 'true') {
+      const markerProbe = new Mesh(
+        new BoxGeometry(0.2, 0.2, 0.2),
+        new MeshBasicMaterial({ color: 0xff00ff, wireframe: true }),
+      );
+      markerProbe.name = 'ar-debug-marker-probe';
+      markerProbe.position.y = 0.1;
+      this.markerRoot.add(markerProbe);
+    }
     this.resize();
     window.addEventListener('resize', this.handleViewportResize);
     window.addEventListener('orientationchange', this.handleViewportResize);
@@ -161,6 +166,8 @@ export class ARRuntime extends EventTarget {
     this.source.onResizeElement();
     const width = document.documentElement.clientWidth || window.innerWidth;
     const height = document.documentElement.clientHeight || window.innerHeight;
+    document.documentElement.style.setProperty('--ar-layout-width', `${width}px`);
+    document.documentElement.style.setProperty('--ar-layout-height', `${height}px`);
     this.renderer.setSize(width, height, false);
     if (this.context && this.source.domElement.videoWidth > 0) {
       this.camera.projectionMatrix.copy(this.context.getProjectionMatrix());
@@ -224,23 +231,14 @@ export class ARRuntime extends EventTarget {
     if (this.source?.ready && this.context) this.context.update(this.source.domElement);
     const markerVisible = this.markerRoot.visible;
     if (markerVisible) {
-      if (!this.lastMarkerVisible) {
-        // ArSmoothedControls starts at the camera origin. Interpolating from
-        // there makes the camera pass through the avatar on the first frame,
-        // filling the viewport with the model's hair/clothes. Snap the first
-        // pose (and every reacquired pose), then smooth continuous tracking.
-        snapObjectTransform(this.smoothedRoot, this.markerRoot);
-      } else {
-        this.smoothedControls?.update(this.markerRoot);
-      }
-      this.smoothedRoot.visible = true;
-    } else {
-      // Preserve the transform for reacquisition, but never draw a stale pose:
-      // moving the phone after marker loss can otherwise make it fill the view.
-      this.smoothedRoot.visible = false;
+      // MarkerControls owns both the pose matrix and visibility. Keeping the
+      // avatar directly below this anchor avoids copying stale/decomposed
+      // transforms and gives tracking a single source of truth.
+      this.markerRoot.updateMatrixWorld(true);
     }
     if (markerVisible && !this.lastMarkerVisible) {
       this.avatar.ensureIdle();
+      this.logMarkerDiagnostics();
       this.dispatchEvent(new Event('markerfound'));
     } else if (!markerVisible && this.lastMarkerVisible) {
       this.dispatchEvent(new Event('markerlost'));
@@ -249,6 +247,28 @@ export class ARRuntime extends EventTarget {
     this.avatar.update(delta);
     this.renderer.render(this.scene, this.camera);
   };
+
+  private logMarkerDiagnostics(): void {
+    this.scene.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld(true);
+    const bounds = new Box3().setFromObject(this.avatar.root);
+    const center = bounds.getCenter(new Vector3());
+    const size = bounds.getSize(new Vector3());
+    const cameraSpace = center.clone().applyMatrix4(this.camera.matrixWorldInverse);
+    const ndc = center.clone().project(this.camera);
+    console.info('[AR render diagnostics]', {
+      markerMatrix: this.markerRoot.matrix.elements.map((value) => Number(value.toFixed(4))),
+      markerScale: this.markerRoot.scale.toArray().map((value) => Number(value.toFixed(4))),
+      avatarVisible: this.avatar.root.visible,
+      avatarBounds: {
+        center: center.toArray().map((value) => Number(value.toFixed(4))),
+        size: size.toArray().map((value) => Number(value.toFixed(4))),
+      },
+      cameraSpace: cameraSpace.toArray().map((value) => Number(value.toFixed(4))),
+      ndc: ndc.toArray().map((value) => Number(value.toFixed(4))),
+      inClipVolume: Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1 && ndc.z >= -1 && ndc.z <= 1,
+    });
+  }
 
   dispose(): void {
     if (this.disposed) return;
