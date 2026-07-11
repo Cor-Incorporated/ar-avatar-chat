@@ -1,6 +1,6 @@
 import { BoxGeometry, Euler, Mesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, MAX_FRAME_DELTA_SECONDS, setUniformScale, snapObjectTransform } from './runtimeMath.js';
+import { anchorAvatarToFeet, clampFrameDelta, coverProjectionScale, isCameraPermissionError, MAX_FRAME_DELTA_SECONDS, setUniformScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
 
 describe('AR runtime math', () => {
   it('clamps a resumed-tab frame delta', () => {
@@ -36,6 +36,11 @@ describe('AR runtime math', () => {
   it('corrects camera projection for cover cropping without stretching', () => {
     expect(coverProjectionScale(1280, 960, 390, 844)).toEqual({ x: (4 / 3) / (390 / 844), y: 1 });
     expect(coverProjectionScale(1280, 960, 844, 390)).toEqual({ x: 1, y: (844 / 390) / (4 / 3) });
+  });
+
+  it('keeps the AR renderer fixed while the iOS keyboard owns the visual viewport', () => {
+    expect(shouldDeferViewportResize(true)).toBe(true);
+    expect(shouldDeferViewportResize(false)).toBe(false);
   });
 
   it('classifies camera permission failures by DOMException name before message fallback', () => {

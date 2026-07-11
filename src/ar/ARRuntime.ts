@@ -13,7 +13,7 @@ import {
   ArToolkitSource,
 } from '@ar-js-org/ar.js/three.js/build/ar-threex.mjs';
 import { AvatarController } from './AvatarController.js';
-import { clampFrameDelta, coverProjectionScale, snapObjectTransform } from './runtimeMath.js';
+import { clampFrameDelta, coverProjectionScale, shouldDeferViewportResize, snapObjectTransform } from './runtimeMath.js';
 
 export class ARRuntime extends EventTarget {
   readonly avatar = new AvatarController();
@@ -31,6 +31,7 @@ export class ARRuntime extends EventTarget {
   private disposed = false;
   private lastMarkerVisible = false;
   private cameraParametersUrl: string | null = null;
+  private keyboardOverlayActive = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     super();
@@ -44,6 +45,7 @@ export class ARRuntime extends EventTarget {
     const key = new DirectionalLight(0xffffff, 0.8);
     key.position.set(1, 2, 1);
     this.scene.add(key);
+    window.addEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
   }
 
   async start(): Promise<void> {
@@ -104,8 +106,8 @@ export class ARRuntime extends EventTarget {
       lerpScale: 0.6,
     });
     this.resize();
-    window.addEventListener('resize', this.resize);
-    window.addEventListener('orientationchange', this.resize);
+    window.addEventListener('resize', this.handleViewportResize);
+    window.addEventListener('orientationchange', this.handleViewportResize);
     this.dispatchEvent(new Event('cameraready'));
   }
 
@@ -193,6 +195,26 @@ export class ARRuntime extends EventTarget {
     }
   };
 
+  private handleViewportResize = (): void => {
+    // iOS Safari emits window.resize while the software keyboard changes the
+    // visual viewport. The AR video remains fixed, so resizing the renderer
+    // and projection here would narrow the camera angle and distort alignment.
+    if (shouldDeferViewportResize(this.keyboardOverlayActive)) return;
+    this.resize();
+  };
+
+  private handleKeyboardOverlayChange = (event: Event): void => {
+    const active = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
+    const wasActive = this.keyboardOverlayActive;
+    this.keyboardOverlayActive = active;
+    if (wasActive && !active) {
+      // Reconcile once after Safari has restored its layout viewport.
+      requestAnimationFrame(() => {
+        if (!this.disposed) this.resize();
+      });
+    }
+  };
+
   private renderFrame = (): void => {
     if (this.disposed) return;
     this.frame = requestAnimationFrame(this.renderFrame);
@@ -232,8 +254,9 @@ export class ARRuntime extends EventTarget {
     if (this.disposed) return;
     this.disposed = true;
     cancelAnimationFrame(this.frame);
-    window.removeEventListener('resize', this.resize);
-    window.removeEventListener('orientationchange', this.resize);
+    window.removeEventListener('resize', this.handleViewportResize);
+    window.removeEventListener('orientationchange', this.handleViewportResize);
+    window.removeEventListener('ar-keyboard-overlay-change', this.handleKeyboardOverlayChange);
     this.markerControls?.dispose?.();
     this.source?.dispose();
     if (this.cameraParametersUrl) URL.revokeObjectURL(this.cameraParametersUrl);

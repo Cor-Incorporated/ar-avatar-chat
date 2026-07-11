@@ -7,6 +7,10 @@ export function clampFrameDelta(deltaSeconds: number): number {
   return Math.min(deltaSeconds, MAX_FRAME_DELTA_SECONDS);
 }
 
+export function shouldDeferViewportResize(keyboardOverlayActive: boolean): boolean {
+  return keyboardOverlayActive;
+}
+
 export function coverProjectionScale(
   videoWidth: number,
   videoHeight: number,
