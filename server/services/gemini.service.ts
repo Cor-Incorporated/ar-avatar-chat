@@ -75,6 +75,7 @@ export async function handleFunctionCalling(
     return { ...response, calendar: { queriedRange: calendarResult.queriedRange, publicEventCount: calendarResult.events.length, availabilityProvided: Boolean(calendarResult.availability) } };
   } catch (error) {
     const code = error instanceof CalendarProviderError ? error.code : 'calendar_unavailable';
-    return { text: '今はカレンダーを確認できんかったと。少し時間をおいて、もう一度試してね。', emotion: 'sad', action: { type: 'retry', reason: code } };
+    console.warn('[Calendar] query failed', { code, retryable: error instanceof CalendarProviderError && error.retryable });
+    return { text: '今はカレンダーを確認できんかったと。少し時間をおいて、もう一度試してね。', emotion: 'sad', action: { type: 'retry', reason: 'calendar_unavailable' } };
   }
 }

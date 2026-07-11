@@ -2,13 +2,18 @@ import type { CalendarQuery } from '../types/calendar.types.js';
 import { CalendarProviderError } from '../types/calendar.types.js';
 
 const CALENDAR_WORDS = /(?:カレンダー|予定|スケジュール|空き(?:時間)?|空いて|予約)/;
-const MEETING_REQUEST = /(?:会議|打ち合わせ).*(?:いつ|今日|明日|今週|来週|時間|確認|予定|スケジュール|空き|ある|入って)/;
+const MEETING_WORDS = /(?:会議|打ち合わせ)/;
+const MEETING_SCHEDULE_CONTEXT = /(?:予定|スケジュール|空き|時間|いつ|今日|明日|今週|来週)/;
+const REQUEST_CUE = /(?:教えて|確認して|確認したい|見せて|調べて|取得して|知りたい|空いて|空き時間|ありますか|ある[？?]|いつ(?:ですか|ある)|何時|[？?])/;
+const TEMPORAL_CUE = /(?:今日|明日|今週|来週|20\d{2}年\d{1,2}月\d{1,2}日|\d{1,2}月\d{1,2}日|20\d{2}[-/]\d{1,2}[-/]\d{1,2})/;
 const GREETING_ONLY = /^(?:こんにちは|こんばんは|おはよう(?:ございます)?|やあ|はじめまして|お疲れさま(?:です)?)[！!。\s]*$/;
 const NON_CALENDAR_STATEMENT = /^(?:予定という.*|予定は未定(?:です)?|スケジュール管理の方法.*|(?:予約機能|カレンダー機能)(?:について)?(?:を)?(?:説明|紹介)して(?:ください)?)[。！!\s]*$/;
 
 export function isCalendarIntent(message: string): boolean {
   const text = message.trim();
-  return !GREETING_ONLY.test(text) && !NON_CALENDAR_STATEMENT.test(text) && (CALENDAR_WORDS.test(text) || MEETING_REQUEST.test(text));
+  if (GREETING_ONLY.test(text) || NON_CALENDAR_STATEMENT.test(text)) return false;
+  const hasSubject = CALENDAR_WORDS.test(text) || (MEETING_WORDS.test(text) && MEETING_SCHEDULE_CONTEXT.test(text));
+  return hasSubject && (REQUEST_CUE.test(text) || TEMPORAL_CUE.test(text));
 }
 
 function jstMidnightUtc(year: number, month: number, day: number): Date {
@@ -32,7 +37,9 @@ export function normalizeCalendarQuery(message: string, now = new Date(), timezo
   let end = new Date(start.getTime() + 86_400_000);
   let kind: CalendarQuery['kind'] = 'today';
 
-  const explicit = message.match(/(?:(20\d{2})[年\/-])?(\d{1,2})[月\/-](\d{1,2})日?/);
+  const japaneseDate = message.match(/(?:(20\d{2})年)?(\d{1,2})月(\d{1,2})日/);
+  const separatedDate = message.match(/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})(?!\d)/);
+  const explicit = japaneseDate || separatedDate;
   if (explicit) {
     const explicitYear = Number(explicit[1] || year);
     const explicitMonth = Number(explicit[2]);

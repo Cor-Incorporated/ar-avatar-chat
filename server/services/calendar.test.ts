@@ -6,8 +6,8 @@ import { allowChatRequest, normalizeClientIp } from './rate-limit.service.js';
 
 describe('calendar intent', () => {
   it.each(['こんにちは', 'おはようございます！', '会社を紹介して'])('does not route ordinary chat: %s', (message) => expect(isCalendarIntent(message)).toBe(false));
-  it.each(['明日の公開予定を教えて', '今週の空き時間は？', '会議のスケジュール'])('routes explicit calendar requests: %s', (message) => expect(isCalendarIntent(message)).toBe(true));
-  it.each(['会議の進め方を教えて', '予約機能を説明して', '予定は未定です'])('does not route calendar-related ordinary chat: %s', (message) => expect(isCalendarIntent(message)).toBe(false));
+  it.each(['明日の公開予定を教えて', '今週の空き時間は？', '会議のスケジュールを確認して'])('routes explicit calendar requests: %s', (message) => expect(isCalendarIntent(message)).toBe(true));
+  it.each(['会議の進め方を教えて', '予約機能を説明して', '予定は未定です', '今後の予定はまだ未定です、詳しくは追ってご連絡します'])('does not route calendar-related ordinary chat: %s', (message) => expect(isCalendarIntent(message)).toBe(false));
   it('normalizes tomorrow in JST', () => {
     const query = normalizeCalendarQuery('明日の予定', new Date('2026-07-10T16:00:00Z'));
     expect(query.timeMin).toBe('2026-07-11T15:00:00.000Z');
@@ -30,6 +30,12 @@ describe('calendar intent', () => {
     const query = normalizeCalendarQuery('7月15日の予定', new Date('2026-07-10T00:00:00Z'));
     expect(query.timeMin).toBe('2026-07-14T15:00:00.000Z');
     expect(() => normalizeCalendarQuery('2026年2月31日の予定')).toThrowError(CalendarProviderError);
+  });
+  it('accepts only year-qualified slash/hyphen dates and ignores phone-number fragments', () => {
+    expect(normalizeCalendarQuery('2026-07-15の予定').timeMin).toBe('2026-07-14T15:00:00.000Z');
+    expect(normalizeCalendarQuery('2026/07/15の予定').timeMin).toBe('2026-07-14T15:00:00.000Z');
+    const weekly = normalizeCalendarQuery('今週の予定を教えて、090-1234-5678にも連絡して', new Date('2026-07-10T16:00:00Z'));
+    expect(weekly.kind).toBe('this_week');
   });
 });
 
@@ -122,6 +128,8 @@ describe('server safeguards', () => {
   it('accepts only normalized IP-shaped rate-limit keys', () => {
     expect(normalizeClientIp('203.0.113.10, 10.0.0.1')).toBe('203.0.113.10');
     expect(normalizeClientIp('2001:db8::1')).toBe('2001:db8::1');
+    expect(normalizeClientIp('::ffff:203.0.113.10')).toBe('203.0.113.10');
+    expect(normalizeClientIp('999.0.0.1')).toBeNull();
     expect(normalizeClientIp('spoofed-client')).toBeNull();
   });
 });
