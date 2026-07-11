@@ -16,9 +16,7 @@
   "description": "",
   "dependencies": {
     "@ai-sdk/google": "^2.0.17",
-    "@mastra/core": "^0.19.1",
     "ai": "^5.0.210",
-    "better-sqlite3": "^12.4.1",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
