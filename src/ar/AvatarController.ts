@@ -86,17 +86,23 @@ export class AvatarController extends EventTarget {
   }
 
   private async loadAnimation(emotion: AvatarEmotion, url: URL): Promise<void> {
-    if (!this.vrm || !this.mixer) return;
+    const vrm = this.vrm;
+    const mixer = this.mixer;
+    if (this.disposed || !vrm || !mixer) return;
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
     const gltf = await loader.loadAsync(url.href);
+    if (this.disposed || this.vrm !== vrm || this.mixer !== mixer) {
+      VRMUtils.deepDispose(gltf.scene);
+      return;
+    }
     const animation = gltf.userData.vrmAnimations?.[0];
     if (!animation) throw new Error(`${emotion}: VRMC_vrm_animation is missing`);
-    const clip = createVRMAnimationClip(animation, this.vrm);
+    const clip = createVRMAnimationClip(animation, vrm);
     if (!clip || clip.duration <= 0 || clip.tracks.length === 0) {
       throw new Error(`${emotion}: animation clip is empty`);
     }
-    const action = this.mixer.clipAction(clip);
+    const action = mixer.clipAction(clip);
     if (emotion === 'neutral') {
       action.setLoop(LoopRepeat, Infinity);
     } else {
