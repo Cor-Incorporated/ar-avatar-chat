@@ -53,6 +53,7 @@ describe('public boundary', () => {
   });
   it('hides unprefixed events and descriptions without marker', () => {
     expect(sanitizePublicEvent({ summary: '役員会' }, '[公開]')).toBeNull();
+    expect(sanitizePublicEvent({ summary: '[公開] 中止イベント', status: 'cancelled' }, '[公開]')).toBeNull();
     expect(extractPublicDescription('内部情報だけ')).toBeUndefined();
   });
   it('converts private busy periods to weekday business-hour free slots', () => {
@@ -116,6 +117,13 @@ DTSTART;VALUE=DATE:20260714\r
 DTEND;VALUE=DATE:20260715\r
 SUMMARY:社内休業\r
 END:VEVENT\r
+BEGIN:VEVENT\r
+UID:cancelled-public\r
+DTSTART;TZID=Asia/Tokyo:20260716T100000\r
+DTEND;TZID=Asia/Tokyo:20260716T110000\r
+SUMMARY:[公開] 中止イベント\r
+STATUS:CANCELLED\r
+END:VEVENT\r
 END:VCALENDAR`;
   const query = { kind: 'this_week', timeMin: '2026-07-12T15:00:00.000Z', timeMax: '2026-07-19T15:00:00.000Z', timezone: 'Asia/Tokyo', availabilityRequested: true } as const;
 
@@ -132,6 +140,7 @@ END:VCALENDAR`;
     expect(result.events).toHaveLength(2);
     expect(result.events[0]).toMatchObject({ title: '相談会', publicDescription: '一般公開です' });
     expect(JSON.stringify(result)).not.toContain('社内休業');
+    expect(JSON.stringify(result)).not.toContain('中止イベント');
     expect(result.availability?.free.length).toBeGreaterThan(0);
   });
 
