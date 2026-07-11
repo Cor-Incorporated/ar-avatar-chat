@@ -156,7 +156,9 @@ export async function handleFunctionCalling(
     });
     process.env.GOOGLE_GENERATIVE_AI_API_KEY = apiKey;
     const execution = await (deps.generate ?? generateText)({
-      model: google(getGeminiModel()), prompt: userPrompt, tools: { getCalendar: calendarTool }, toolChoice: { type: 'tool', toolName: 'getCalendar' }, stopWhen: stepCountIs(1)
+      model: google(getGeminiModel()),
+      prompt: 'サーバーで正規化済みのCalendar queryを実行してください。',
+      tools: { getCalendar: calendarTool }, toolChoice: { type: 'tool', toolName: 'getCalendar' }, stopWhen: stepCountIs(1)
     });
     calendarResult = execution.toolResults[0]?.output as CalendarResult | undefined;
     if (!calendarResult) calendarResult = await calendarProvider.query(query);

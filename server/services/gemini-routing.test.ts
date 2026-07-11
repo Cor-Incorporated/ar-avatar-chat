@@ -149,7 +149,7 @@ describe('Gemini route orchestration', () => {
       { generate, searchKnowledge },
     );
     const finalCall = calls[calls.length - 1];
-    const serialized = JSON.stringify(finalCall);
+    const serialized = JSON.stringify(calls);
     expect(serialized).not.toContain('未公開売上');
     expect(serialized).not.toContain('顧客A');
     expect(serialized).not.toContain('1億円');
