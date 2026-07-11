@@ -258,7 +258,11 @@ export class BottomSheet {
         <button class="attachment-remove" type="button" aria-label="添付画像を削除">×</button>
       </div>`;
     this.attachmentPreview.classList.add('is-visible');
-    this.attachmentPreview.querySelector('.attachment-remove')?.addEventListener('click', () => this.clearAttachment());
+    this.attachmentPreview.querySelector('.attachment-remove')?.addEventListener(
+      'click',
+      () => this.clearAttachment(),
+      { signal: this.listenerController.signal },
+    );
   }
 
   private showAttachmentError(message: string): void {
