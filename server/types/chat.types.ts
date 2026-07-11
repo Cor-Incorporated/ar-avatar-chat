@@ -40,7 +40,7 @@ export interface ConversationHistoryItem {
  */
 export interface ChatRequest {
   message?: string;
-  oauthToken?: string;
+  timezone?: string;
   conversationHistory?: ConversationHistoryItem[];
   attachments?: ChatAttachment[];
 }
@@ -52,6 +52,8 @@ export interface ChatResponse {
   message: string;
   emotion: EmotionType;
   timestamp: Date;
+  action?: { type: 'retry'; reason: string };
+  calendar?: { queriedRange: { start: string; end: string; timezone: string }; publicEventCount: number; availabilityProvided: boolean };
   functionCalled?: {
     name: string;
     result: unknown;
@@ -98,6 +100,8 @@ export interface CalendarSearchResponse {
 export interface GeminiResponse {
   text: string;
   emotion: EmotionType;
+  action?: { type: 'retry'; reason: string };
+  calendar?: { queriedRange: { start: string; end: string; timezone: string }; publicEventCount: number; availabilityProvided: boolean };
   functionCall?: {
     name: string;
     args: Record<string, unknown>;
