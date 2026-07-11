@@ -46,8 +46,15 @@ describe('AR runtime math', () => {
   });
 
   it('corrects camera projection for cover cropping without stretching', () => {
-    expect(coverProjectionScale(1280, 960, 390, 844)).toEqual({ x: (4 / 3) / (390 / 844), y: 1 });
-    expect(coverProjectionScale(1280, 960, 844, 390)).toEqual({ x: 1, y: (844 / 390) / (4 / 3) });
+    const portrait = coverProjectionScale(1280, 960, 390, 844);
+    const landscape = coverProjectionScale(1280, 960, 844, 390);
+    expect(portrait).toEqual({ x: (4 / 3) / (390 / 844), y: 1 });
+    expect(landscape).toEqual({ x: 1, y: (844 / 390) / (4 / 3) });
+
+    // A 4:3 calibrated projection has m00 / m11 = 3 / 4. After cover
+    // correction, equal world distances must occupy equal pixel distances.
+    expect((3 / 4) * portrait.x * 390).toBeCloseTo(portrait.y * 844);
+    expect((3 / 4) * landscape.x * 844).toBeCloseTo(landscape.y * 390);
   });
 
   it('keeps the AR renderer fixed while the iOS keyboard owns the visual viewport', () => {
