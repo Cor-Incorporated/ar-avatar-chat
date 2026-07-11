@@ -24,8 +24,9 @@ export function classifyIntentRoute(message: string): IntentRouteResult {
   const normalized = message.trim();
   const clauses = splitIntentClauses(normalized);
   const signals: IntentRouteResult['signals'] = [];
-  const companyIntent = COMPANY_IDENTITY.test(normalized) || COMPANY_OVERVIEW.test(normalized)
-    || (COMPANY_UNQUALIFIED_REQUEST.test(normalized) && INFORMATION_REQUEST.test(normalized));
+  const companyIntent = clauses.some((clause) =>
+    COMPANY_IDENTITY.test(clause) || COMPANY_OVERVIEW.test(clause)
+    || (COMPANY_UNQUALIFIED_REQUEST.test(clause) && INFORMATION_REQUEST.test(clause)));
   const calendarIntent = clauses.some((clause) =>
     isCalendarIntent(clause)
     && !GENERIC_RESERVATION.test(clause)

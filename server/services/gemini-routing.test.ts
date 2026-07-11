@@ -181,6 +181,14 @@ describe('Gemini route orchestration', () => {
     expect(result.text).toContain('公開デモ');
   });
 
+  it('keeps company knowledge when the Calendar clause comes first', async () => {
+    const result = await handleFunctionCalling('key', '来週の公開予定も教えて、あと会社を紹介して', [], [], provider, context, { generate });
+    expect(result.route).toBe('mixed');
+    expect(result.text).toContain('機密データを安全に扱うAI基盤');
+    expect(result.text).toContain('公開デモ');
+    expect(query).toHaveBeenCalledOnce();
+  });
+
   it('keeps temporal context while querying Calendar for a mixed temporal request', async () => {
     const result = await handleFunctionCalling('key', '今何時？ あと明日の公開予定も教えて', [], [], provider, context, { generate, searchKnowledge });
     expect(result.route).toBe('mixed');

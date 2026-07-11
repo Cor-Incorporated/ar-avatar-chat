@@ -54,6 +54,13 @@ describe('intent route classifier', () => {
   });
 
   it.each([
+    '来週の公開予定も教えて、あと会社を紹介して',
+    '今週の空き時間を教えて、あと会社概要も教えて',
+  ])('keeps a trailing unqualified company clause: %s', (message) => {
+    expect(classifyIntentRoute(message)).toEqual({ route: 'mixed', signals: ['calendar', 'company'] });
+  });
+
+  it.each([
     '会社の今後の予定を教えて、あと来週の公開イベントを教えて',
     'デモを予約したい、あと来週の公開予定を教えて',
   ])('keeps an explicit Calendar clause despite suppression words elsewhere: %s', (message) => {
