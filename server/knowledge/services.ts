@@ -25,6 +25,6 @@ export const SERVICE_KNOWLEDGE: readonly KnowledgeEntry[] = [
     id: 'service.calendar', category: 'service', title: '公開Calendar案内',
     answer: '明確に予定や空き時間を質問した場合だけ、サーバーに設定されたCalendarを確認します。公開指定された予定だけ詳細を案内します。',
     aliases: ['カレンダー機能', '予定を確認', '空き時間', '公開予定'],
-    keywords: ['Calendar', 'カレンダー', '予定', '空き時間', '公開'], sourceIds: ['calendar-policy', 'knowledge-policy'], visibility: 'public', reviewedAt,
+    keywords: ['Calendar', 'カレンダー', '予定', '空き時間', '公開'], sourceIds: ['knowledge-policy'], visibility: 'public', reviewedAt,
   },
 ] as const;
