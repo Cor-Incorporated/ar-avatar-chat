@@ -7,9 +7,8 @@ const info = document.querySelector<HTMLElement>('#info');
 if (!canvas || !status || !info) throw new Error('Required AR shell elements were not found');
 
 const apiUrl = window.location.hostname === 'localhost' ? 'http://localhost:3000/api/chat' : '/api/chat';
-new ChatController(apiUrl);
-
 const runtime = new ARRuntime(canvas);
+new ChatController(apiUrl, runtime.avatar);
 runtime.addEventListener('markerfound', () => {
   status.textContent = '✅ マーカー検出！';
   info.classList.add('hidden');
@@ -21,9 +20,9 @@ runtime.addEventListener('markerlost', () => {
 runtime.avatar.addEventListener('ready', () => {
   status.textContent = '✨ 準備完了！';
 });
-
-// Typed application API. ChatController migration can consume this without globals.
-window.dispatchEvent(new CustomEvent('avatar-controller-ready', { detail: runtime.avatar }));
+runtime.addEventListener('cameraready', () => {
+  status.textContent = '⏳ アバター読み込み中...';
+});
 
 runtime.start().catch((error: unknown) => {
   console.error('[AR] initialization failed', error);

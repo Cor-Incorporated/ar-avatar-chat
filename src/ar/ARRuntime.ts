@@ -30,6 +30,7 @@ export class ARRuntime extends EventTarget {
   private frame = 0;
   private disposed = false;
   private lastMarkerVisible = false;
+  private hasTrackedPose = false;
   private markerGraceUntil = 0;
   private cameraParametersUrl: string | null = null;
 
@@ -80,7 +81,8 @@ export class ARRuntime extends EventTarget {
 
     return new Promise((resolve, reject) => {
       this.source?.init(() => {
-        this.context?.init(() => {
+        if (!this.source) return reject(new Error('AR.js camera source was disposed before becoming ready'));
+        this.waitForCameraFrame(this.source.domElement).then(() => this.context?.init(() => {
           if (!this.context || !this.source) return reject(new Error('AR.js initialization was interrupted'));
           this.camera.projectionMatrix.copy(this.context.getProjectionMatrix());
           this.markerControls = new ArMarkerControls(this.context, this.markerRoot, {
@@ -98,9 +100,35 @@ export class ARRuntime extends EventTarget {
           this.resize();
           window.addEventListener('resize', this.resize);
           window.addEventListener('orientationchange', this.resize);
+          this.dispatchEvent(new Event('cameraready'));
           resolve();
-        });
+        }), reject);
       }, reject);
+    });
+  }
+
+  private waitForCameraFrame(video: HTMLVideoElement, timeoutMs = 8000): Promise<void> {
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error('Camera stream did not produce a video frame within 8 seconds'));
+      }, timeoutMs);
+      const check = () => {
+        if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
+        cleanup();
+        resolve();
+      };
+      const cleanup = () => {
+        window.clearTimeout(timeout);
+        video.removeEventListener('loadeddata', check);
+        video.removeEventListener('canplay', check);
+      };
+      video.addEventListener('loadeddata', check);
+      video.addEventListener('canplay', check);
+      void video.play().catch(() => undefined);
     });
   }
 
@@ -152,12 +180,19 @@ export class ARRuntime extends EventTarget {
     if (this.source?.ready && this.context) this.context.update(this.source.domElement);
     const markerVisible = this.markerRoot.visible;
     if (markerVisible) {
+      this.hasTrackedPose = true;
       this.smoothedControls?.update(this.markerRoot);
       this.smoothedRoot.visible = true;
       this.markerGraceUntil = performance.now() + 2500;
     } else {
       const keyboardActive = document.documentElement.classList.contains('keyboard-overlay-active');
-      this.smoothedRoot.visible = shouldKeepAvatarVisible(false, this.markerGraceUntil, performance.now(), keyboardActive);
+      this.smoothedRoot.visible = shouldKeepAvatarVisible(
+        this.hasTrackedPose,
+        false,
+        this.markerGraceUntil,
+        performance.now(),
+        keyboardActive,
+      );
     }
     if (markerVisible && !this.lastMarkerVisible) {
       this.avatar.ensureIdle();

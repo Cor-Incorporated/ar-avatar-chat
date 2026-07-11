@@ -14,13 +14,14 @@ export class ChatController {
   private apiEndpoint: string;
   private avatarController: AvatarEmotionController | null = null;
 
-  constructor(apiEndpoint: string = 'http://localhost:3000/api/chat') {
+  constructor(
+    apiEndpoint: string = 'http://localhost:3000/api/chat',
+    avatarController: AvatarEmotionController | null = null,
+  ) {
     this.apiEndpoint = apiEndpoint;
+    this.avatarController = avatarController;
     this.bottomSheet = new BottomSheet();
     this.bottomSheet.setSendCallback(this.sendMessage.bind(this));
-    window.addEventListener('avatar-controller-ready', (event) => {
-      this.avatarController = (event as CustomEvent<AvatarEmotionController>).detail;
-    });
   }
 
   /**
