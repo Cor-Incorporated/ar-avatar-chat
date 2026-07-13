@@ -7,7 +7,6 @@ node_modules/
 # Phase 2 Server
 server/.env
 server/node_modules
-server/package-lock.json
 
 # OS files
 .DS_Store

@@ -1,0 +1,32 @@
+name: Production Chat Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_url:
+        description: Production origin to verify
+        required: true
+        default: https://ar-avatar-chat.vercel.app
+        type: string
+      expected_commit_sha:
+        description: Commit SHA expected behind the production alias
+        required: true
+        type: string
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify production greeting and deployment commit
+        env:
+          PRODUCTION_URL: ${{ inputs.production_url }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/production-chat-probe.mjs

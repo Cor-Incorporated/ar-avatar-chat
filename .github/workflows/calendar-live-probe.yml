@@ -1,0 +1,45 @@
+name: Calendar Live Probe
+
+on:
+  pull_request:
+    branches: [dev, chore/integration-verification]
+    paths:
+      - '.github/workflows/calendar-live-probe.yml'
+      - 'server/**'
+  workflow_dispatch:
+
+concurrency:
+  group: calendar-live-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      HAS_CALENDAR_ICAL_SECRET: ${{ secrets.GOOGLE_CALENDAR_ICAL_URL != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install and build server
+        run: |
+          npm ci --prefix server
+          npm run build --prefix server
+
+      - name: Probe private iCal provider
+        if: env.HAS_CALENDAR_ICAL_SECRET == 'true'
+        env:
+          GOOGLE_CALENDAR_ICAL_URL: ${{ secrets.GOOGLE_CALENDAR_ICAL_URL }}
+          GOOGLE_CALENDAR_TIMEZONE: Asia/Tokyo
+        run: node server/scripts/calendar-live-probe.mjs
