@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, chore/integration-verification]
+  push:
+    branches: [dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Install client dependencies
+        run: npm ci
+
+      - name: Install server dependencies
+        run: npm ci --prefix server
+
+      - name: Type-check client and server
+        run: npm run type-check
+
+      - name: Test AR runtime
+        run: npm run test:ar
+
+      - name: Test Vercel API boundary
+        run: npm run test:api
+
+      - name: Assert the Vercel function allowlist
+        run: npm run test:vercel-functions
+
+      - name: Test server when a real test suite exists
+        shell: bash
+        run: |
+          test_script="$(node -p 'require("./server/package.json").scripts?.test || ""')"
+          if [[ -n "$test_script" && "$test_script" != *"no test specified"* ]]; then
+            npm test --prefix server
+          else
+            echo "Server test suite is not implemented on this branch; skipping."
+          fi
+
+      - name: Validate VRMA assets
+        run: npm run validate:vrma
+
+      - name: Build production artifacts
+        run: npm run build

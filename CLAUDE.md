@@ -1,160 +1,80 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides repository-specific guidance for Claude Code.
 
 ## Project Overview
 
-This is an AR avatar chat application for Cor.Inc. - a technical demo for B2B partners featuring:
-- AR marker detection using a penguin logo on business cards
-- VRM avatar display with motion animations
-- Built with A-Frame, AR.js, and three-vrm
+Cor.Inc.の名刺マーカー上へVRMアバターを表示し、Geminiチャットの感情に応じて
+VRMAモーションを再生するモバイルARデモです。対象はiOS Safari 18+とAndroid
+Chrome 120+で、カメラ利用にはHTTPSが必要です。
 
-**Target devices**: Mobile smartphones (iOS Safari 18+, Android Chrome 120+) with HTTPS required.
+## Current Frontend Architecture
+
+- AR.js 3.4.8のThree.js版を使用する。A-Frameは実行時に使用しない。
+- Three.js 0.180.0、`@pixiv/three-vrm` 3.5.5、
+  `@pixiv/three-vrm-animation` 3.5.5をnpm/Viteで管理する。
+- `src/main.ts`が`ARRuntime`と`ChatController`を生成し、破棄まで所有する。
+- `src/ar/ARRuntime.ts`がカメラ、AR.js tracking、平滑化、renderer、単一rAFを所有する。
+- `src/ar/AvatarController.ts`がVRM/VRMA、AnimationMixer、表情、感情遷移を所有する。
+- `src/ar/runtimeMath.ts`には投影補正、delta clamp、表示猶予などの純粋関数を置く。
+
+描画順は必ず次を維持する。
+
+1. AR.js tracking更新
+2. マーカー姿勢の平滑化と表示猶予判定
+3. AnimationMixerとVRM更新
+4. Three.js render
+
+旧`src/components/vrm-loader.js`、`vrm-animation.js`、
+`vrm-animation-controller.js`、A-Frame要素、CDN import mapを復活させないこと。
+Viteの`assert-single-three-runtime`がbundle内のThree.js複数実体を拒否する。
 
 ## Development Commands
 
-### Local Development
 ```bash
-# Start local server (from src/ directory)
-python3 -m http.server 8000
-# Access at http://localhost:8000/index.html
+npm ci
+npm run type-check:client
+npm run test:ar
+npm run validate:vrma
 
-# OR use VS Code Live Server extension
-# Right-click on src/index.html → "Open with Live Server"
+cd server
+npm ci
+npm run type-check
+cd ..
+
+npm run build
 ```
 
-### Testing
-- **Desktop testing**: Use Chrome DevTools device emulation + printed Hiro marker
-- **Mobile testing**: Deploy to HTTPS environment (ngrok/Glitch/Vercel) + printed business card marker
-- **Performance check**: Chrome DevTools → Performance tab (target: 30fps+)
+ローカルカメラ確認はHTTPS環境またはVercel Previewを使う。静的HTTPサーバーへ
+TypeScriptソースを直接配信しない。Vite成果物は`dist/client`へ生成される。
 
-## Code Architecture
+## AR Invariants
 
-### Technology Stack
-- **A-Frame 1.7.0**: WebVR framework for AR scene management
-- **AR.js 3.4.7**: Marker-based AR tracking
-- **Three.js 0.177.0**: 3D rendering engine
-- **@pixiv/three-vrm 3.4.2**: VRM avatar loader
-- **@pixiv/three-vrm-animation 3.4.2**: VRM animation system (Phase 7で公式パッケージに移行)
+- avatar scaleはX/Y/Z共通の等方値だけを使う。
+- humanoidのleftFoot/rightFootをマーカー面へ合わせ、存在しない場合だけBox3へfallbackする。
+- neutralは先行ロードし、感情モーション終了後に必ずneutralへ戻す。
+- background復帰後の大きなframe deltaをclampする。
+- marker lost後は最後の姿勢を2.5秒保持し、チャット入力中は保持を延長する。
+- videoのcover cropとcamera projectionを同じ比率で補正する。
+- AR.js、video、MediaStream、VRM、renderer、イベントlistenerを`dispose()`で解放する。
 
-### Component System
-Custom A-Frame components are ES6 modules using import maps:
+## Validation and Release Gates
 
-**`src/components/vrm-loader.js`**
-- Loads VRM models using GLTFLoader + VRMLoaderPlugin
-- Emits `vrm-loaded` event when ready
-- Handles VRM updates in `tick()` function (required for three-vrm)
-- Stores VRM instance at `this.vrm` for animation access
+- `sad.vrma`はduration 0の既知破損資産であり、runtimeでは`VRMA_02.vrma`を使う。
+- VRMA runtime資産のextension、duration、track、humanoid bone検証を通す。
+- iPhone Safariでカメラ、マーカー再検出、縦横比、キーボード、30秒neutralを確認する。
+- implemented / PR-ready / merged / deployed / live evidenceを分けて報告する。
+- 実装とREADME/CLAUDE.mdが乖離する変更は同じPRで同期する。
 
-**`src/components/vrm-animation.js`**
-- Listens for `vrm-loaded` event before loading animations
-- Uses THREE.AnimationMixer for motion playback
-- Supports `.vrma` (VRM Animation) format
-- Provides `playAnimation()` method for external control (bypasses A-Frame lifecycle)
-- Uses `ready` and `pendingPlay` flags to handle timing issues
+## Performance and Security
 
-### Integration Pattern
-```html
-<!-- A-Frame scene with AR.js -->
-<a-scene arjs="..." vr-mode-ui="enabled: false">
-  <!-- Custom marker detection -->
-  <a-marker type="pattern" url="./assets/markers/penguin-marker.patt">
-    <!-- VRM avatar entity -->
-    <a-entity
-      vrm-loader="src: ./assets/models/avatar.vrm"
-      vrm-animation="src: ./assets/animations/jump.vrma; autoplay: true"
-    ></a-entity>
-  </a-marker>
-</a-scene>
-```
-
-### Key Event Flow
-1. **Marker detection**: `markerFound` → trigger animation playback
-2. **VRM loading**: `vrm-loaded` → enable animation component
-3. **Animation update**: `tick()` → update AnimationMixer and VRM
-
-## Important Constraints
-
-### Strictly Follow Development Instructions
-- **DO NOT** deviate from library versions specified in `docs/01_開発指示書_Phase1-MVP.md`
-- **DO NOT** change directory structure without PdM approval
-- **DO NOT** skip steps or proceed with unresolved errors
-- **DO** report to PdM at each checkpoint completion
-
-### Code Quality
-- Add Japanese comments for complex logic (development team preference)
-- Handle errors with user-friendly status messages in `#info` div
-- Test on actual devices, not just desktop emulation
-
-### Performance Requirements
-- Target FPS: 30+ on mobile
-- VRM polygon count: ≤50,000
-- Texture size: ≤2048px
-- Marker detection range: 30cm-1m
-
-### Asset Optimization
-- Use VRoid Studio export settings: Texture 1024px, Low-Medium polygon reduction
-- Compress VRM files if >10MB
-- High-contrast marker images for reliable detection
-
-## Project Phases
-
-**Phase 1 ✅ (Completed - 2025-10-01)**: MVP with marker detection + VRM avatar + motion animation
-- All implementation steps completed
-- Debug logs removed and code refactored
-- Desktop browser testing complete
-- Ready for HTTPS deployment and mobile testing
-
-**Phase 2 ✅ (Completed - 2025-10-02)**: LLM chat integration with Gemini 3.1 Flash-Lite + Google Calendar
-- **Day 1 (2025-10-01)**: Proxy server + OAuth handler implementation complete
-- **Day 2 Morning (2025-10-02)**: Function Calling + 博多弁tone implementation complete
-- **Day 2 Afternoon (2025-10-02)**: クライアント統合完了（チャットUI + アニメーション制御）
-- **Day 2 Evening (2025-10-02)**: 統合テスト成功 + リファクタリング完了 ✅
-- Technical achievements:
-  - Gemini 3.1 Flash-Lite + Structured Output方式実装（tools + responseSchema 併用）
-  - 博多弁キャラクター + 感情検出（7種類: neutral/happy/angry/sad/relaxed/surprised/thinking）
-  - VRMアニメーション自動切り替え（感情連動）
-  - VRM表情制御（@pixiv/three-vrm expressionManager）
-  - ES Module対応（@google/genai v1.21.0）
-  - チャットUI（モダンなグラデーションデザイン）
-
-**Phase 3 ✅ (Completed - 2025-10-02)**: TypeScript migration + Mobile UI optimization
-- **Day 1 (2025-10-02)**: TypeScript環境構築 + 型定義ファイル作成
-- **Day 2 (2025-10-02)**: バックエンド完全TypeScript化 + ボトムシートUI実装
-- Technical achievements:
-  - **TypeScript環境構築**: tsconfig.json、型定義完備
-  - **バックエンド完全TypeScript化**: server/をフル型安全化（index.ts、gemini.service.ts）
-  - **段階的フロントエンド移行**: 新規コード（ボトムシートUI）のみTypeScript、既存A-FrameコンポーネントはJS維持
-  - **ボトムシートUI実装**: モバイル最適化された3段階展開UI（collapsed/peek/expanded）
-    - AR表示領域: 60% → 90%以上に拡大
-    - ドラッグ&スワイプジェスチャー対応
-    - レスポンシブデザイン（縦/横画面、タブレット対応）
-    - ダークモード、アクセシビリティ対応
-  - **Mastra準備**: AIエージェントフレームワーク環境構築（Phase 4で本格統合予定）
-  - **コードリファクタリング**: 古いJSファイル削除、.gitignore更新
-- **Current Status**: Phase 3 MVP完成 - TypeScript基盤 + モバイルUI完成
-- **Next Phase**: Phase 4（音声会話 + リップシンク + Mastra完全統合）
-
-**Phase 7 ✅ (Completed - 2025-10-13)**: three-vrm v3.4.2への移行
-- **所要時間**: 2時間（予定2-4時間を短縮）
-- **目的**: カスタム実装から公式パッケージへの完全移行
-- Technical achievements:
-  - **公式パッケージ完全移行**: three-vrm v3.4.2 + @pixiv/three-vrm-animation v3.4.2
-  - **コード削減**: カスタムライブラリ588行削除（src/lib/VRMAnimation/, src/lib/utils/）
-  - **型安全性向上**: TypeScript型定義、specVersion検証、T-pose違反警告
-  - **全機能完全保持**: 全てのボーン命名規則に対応（Mixamo/VRM標準/カスタム）
-  - **リスクゼロ移行**: 公式実装とカスタム実装のアルゴリズムが完全に同一と証明済み
-- **技術的改善**:
-  - 公式サポート取得
-  - 詳細なエラーメッセージ
-  - 最新Three.js v0.177.0対応
-  - メンテナンス性向上
+- 目標30fps以上。初回bundleと17MB VRMは継続的な最適化対象。
+- 秘密情報をクライアントbundleやログへ含めない。
+- `Permissions-Policy: camera=(self)`等の既存ヘッダーを維持する。
+- CSPはAR.js/Emscriptenのeval/blob互換を実ブラウザで確認してから追加する。
 
 ## Critical Files
 
-Before making changes, read:
-1. `docs/01_開発指示書_Phase1-MVP.md` - Detailed implementation instructions with code examples
-2. `docs/02_チェックリスト.md` - Progress tracking checklist
-3. `README.md` - Project overview and team communication rules
-
-The development instructions contain exact code templates and CDN versions - use them verbatim unless discussed with PdM.
+変更前に`README.md`、`docs/adr/001-ar-viewport-projection-and-chat-overlay.md`、
+関連Issue/PRを確認する。古いPhase文書のCDNコード例より、現在の`package.json`と
+上記アーキテクチャを優先する。

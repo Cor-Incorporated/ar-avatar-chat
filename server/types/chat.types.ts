@@ -1,4 +1,5 @@
 import { EmotionType } from './emotion.types.js';
+import type { IntentRoute } from '../services/intent-route.service.js';
 
 /**
  * チャットメッセージの役割
@@ -40,7 +41,7 @@ export interface ConversationHistoryItem {
  */
 export interface ChatRequest {
   message?: string;
-  oauthToken?: string;
+  timezone?: string;
   conversationHistory?: ConversationHistoryItem[];
   attachments?: ChatAttachment[];
 }
@@ -52,10 +53,30 @@ export interface ChatResponse {
   message: string;
   emotion: EmotionType;
   timestamp: Date;
+  action?: { type: 'retry'; reason: 'calendar_unavailable'; retryable: boolean };
+  calendar?: { queriedRange: { start: string; end: string; timezone: string }; publicEventCount: number; availabilityProvided: boolean };
   functionCalled?: {
     name: string;
     result: unknown;
   };
+}
+
+export interface RequestContext {
+  now: Date;
+  timezone: 'Asia/Tokyo';
+  locale: 'ja-JP';
+}
+
+export interface TemporalFact {
+  kind: 'current_date' | 'current_time' | 'current_year';
+  isoInstant: string;
+  timezone: 'Asia/Tokyo';
+  year: number;
+  month: number;
+  day: number;
+  weekday: string;
+  hour: number;
+  minute: number;
 }
 
 /**
@@ -98,6 +119,14 @@ export interface CalendarSearchResponse {
 export interface GeminiResponse {
   text: string;
   emotion: EmotionType;
+  action?: { type: 'retry'; reason: 'calendar_unavailable'; retryable: boolean };
+  calendar?: { queriedRange: { start: string; end: string; timezone: string }; publicEventCount: number; availabilityProvided: boolean };
+  /** サーバーログ用。クライアント契約には公開しない。 */
+  route?: IntentRoute;
+  /** サーバーログ用。クライアント契約には公開しない。 */
+  model?: string;
+  /** 公開知識の追跡用。APIレスポンス本文には公開しない。 */
+  knowledge?: { sourceIds: string[]; reviewedAt: string[] };
   functionCall?: {
     name: string;
     args: Record<string, unknown>;

@@ -43,6 +43,12 @@ export interface ChatAPIResponse {
   message: string;
   emotion: EmotionType;
   timestamp: string;
+  action?: { type: 'retry'; reason: 'calendar_unavailable'; retryable: boolean };
+  calendar?: {
+    queriedRange: { start: string; end: string; timezone: string };
+    publicEventCount: number;
+    availabilityProvided: boolean;
+  };
 }
 
 /**
@@ -76,14 +82,3 @@ export interface MessageSendPayload {
  * ボトムシート状態
  */
 export type BottomSheetState = 'collapsed' | 'peek' | 'expanded';
-
-/**
- * ボトムシート設定
- */
-export interface BottomSheetConfig {
-  collapsedHeight: number;
-  peekHeight: number;
-  expandedHeight: number;
-  dragThreshold: number;
-  animationDuration: number;
-}
