@@ -41,7 +41,26 @@ if [[ -n "${H5_DIFF_FILES:-}" ]]; then
   # newline or space separated override (tests)
   DIFF_FILES="$(printf '%s\n' $H5_DIFF_FILES)"
 else
-  git fetch --no-tags --depth=1 origin "$(echo "$BASE_REF" | sed 's#^origin/##')" 2>/dev/null || true
+  # `--depth=1` truncates the local repository, not just this fetch: it writes
+  # .git/shallow and every later merge-base against the base ref fails. CI starts
+  # from a shallow checkout so the flag costs nothing there, but running this gate
+  # locally against a full clone destroys history. Measured 2026-08-27 in Grift:
+  # doing so made PR #2140 report "refusing to merge unrelated histories".
+  # Ported from Cor-Incorporated/Grift eb6df7415 (PR #2152). Ref: aidd-governance#89
+  #
+  # 2026-09-03 実測 (aidd-governance#146): この修正は 2026-09-02 に 2 リポへ入ったが、
+  # 同じファイルを持つ 9 リポのうち 4 リポにしか届いていなかった。ai-cluster は
+  # h5-admission を required check にしながら無ガードで、実際に切り詰められていた
+  # (16 commit -> 修正 + unshallow 後 333 commit)。
+  #
+  # このスクリプトは ROOT を自己相対で決めるので、このコピーが切り詰めるのは
+  # 本リポジトリだけである。逆に他リポジトリで直しても本リポジトリは直らない。
+  h5_base_branch="$(echo "$BASE_REF" | sed 's#^origin/##')"
+  if [[ "$(git rev-parse --is-shallow-repository 2>/dev/null)" == "true" ]]; then
+    git fetch --no-tags --depth=1 origin "$h5_base_branch" 2>/dev/null || true
+  else
+    git fetch --no-tags origin "$h5_base_branch" 2>/dev/null || true
+  fi
   if git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
     DIFF_FILES="$(git diff --name-only "$BASE_REF"...$HEAD_REF 2>/dev/null || git diff --name-only "$BASE_REF" $HEAD_REF 2>/dev/null || true)"
   else
